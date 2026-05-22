@@ -1,10 +1,10 @@
 {
-	"id": "writing-annotations",
-	"name": "写作的标注",
-	"version": "1.0.1",
-	"minAppVersion": "0.15.0",
-	"description": "标注与脚注,适合小说作者用的大纲细纲的标注插件",
-	"author": "hornat",
-	"authorUrl": "",
-	"isDesktopOnly": false
+  "id": "writing-annotations",
+  "name": "写作的标注",
+  "version": "1.0.2",
+  "minAppVersion": "0.15.0",
+  "description": "Footnote and hover note compass, with annotation and draft variant management designed for creative writers.",
+  "author": "hornat",
+  "authorUrl": "",
+  "isDesktopOnly": false
 }
