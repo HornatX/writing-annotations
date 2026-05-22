@@ -1,0 +1,436 @@
+/* =========================================
+   容器与基础布局
+   ========================================= */
+.workspace-leaf-content .view-content {
+    padding: 4px;
+    padding-bottom: 10px;
+    overflow: auto;
+}
+
+.footnote-compass-view-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.footnote-list-root {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.footnote-compass-container {
+    padding: 0px;
+}
+
+.footnote-empty {
+    color: var(--text-faint);
+    padding: 20px;
+    text-align: center;
+    font-size: 13px;
+}
+
+/* =========================================
+   脚注列表 UI
+   ========================================= */
+.footnote-item {
+    padding: 4px 8px;
+    margin-bottom: 4px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    gap: 8px;
+}
+
+.footnote-item:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+.footnote-item.is-active {
+    background-color: var(--background-primary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.footnote-key {
+    font-weight: bold;
+    color: var(--text-accent);
+    flex-shrink: 0;
+    display: none;
+}
+
+.footnote-item.is-active .footnote-key {
+    color: inherit;
+}
+
+.footnote-content {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-muted);
+    font-size: 18px;
+    line-height: 1.5;
+}
+
+.footnote-item:hover .footnote-content {
+    color: var(--text-normal);
+}
+
+.footnote-item.is-active .footnote-content {
+    color: rgb(0, 157, 255);
+    font-weight: bold;
+}
+
+/* =========================================
+   脚注美化开关 (通过 Body Class 挂载)
+   ========================================= */
+.footnote-beautify-enabled div.popover-titlebar {
+    display: none !important;
+}
+
+.footnote-beautify-enabled .popover.hover-popover .markdown-preview-view {
+    font-size: 1.5em;
+    line-height: 1.6;
+}
+
+.footnote-beautify-enabled .popover.hover-popover .cm-editor {
+    font-size: 1.7em !important;
+}
+
+.footnote-beautify-enabled .popover.hover-popover.is-editing {
+    outline: none !important;
+    border: none !important;
+}
+
+.footnote-beautify-enabled .markdown-source-view:not(.is-source-mode) span.cm-footref.cm-hmd-barelink:last-child::after {
+    content: "💬";
+    font-size: 26px;
+    line-height: 1.1;
+    margin-left: -15px;
+    color: var(--text-normal);
+    background-color: transparent;
+}
+
+.footnote-beautify-enabled .markdown-source-view:not(.is-source-mode) span.cm-footref.cm-hmd-barelink {
+    font-size: 8px !important;
+    line-height: 3 !important;
+    color: #1E1E1E;
+    margin: 0 !important;
+    padding: 0 !important;
+    position: relative;
+    display: inline-block;
+}
+
+.footnote-beautify-enabled .markdown-source-view:not(.is-source-mode) span.cm-footref.cm-hmd-barelink::before {
+    content: none !important;
+}
+
+.footnote-beautify-enabled .markdown-source-view:not(.is-source-mode) span.cm-footref.cm-hmd-barelink:not(:last-child)::after {
+    content: none !important;
+}
+
+/* =========================================
+   高亮与幻影替换特效
+   ========================================= */
+.annotation-highlight,
+.annotation-phantom {
+    border-radius: 10px;
+}
+
+.annotation-phantom {
+    cursor: default;
+    font-size: inherit;
+}
+
+/* =========================================
+   吸顶与大纲折叠
+   ========================================= */
+.annotation-section-header {
+    position: sticky;
+    top: -10px;
+    z-index: 100;
+    background-color: var(--background-secondary);
+    margin: 0px -10px 10px -10px;
+    padding: 10px 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.annotation-divider {
+    margin: 0;
+    padding: 0;
+    font-size: 13px;
+    font-weight: bold;
+    color: var(--text-muted);
+}
+
+.annotations-collapsed-mode .annotation-card:not(.is-active) .annotation-comments-list {
+    display: none;
+}
+
+.annotations-collapsed-mode .annotation-card:not(.is-active) {
+    padding-bottom: 5px;
+}
+
+/* =========================================
+   变体标注卡片 UI
+   ========================================= */
+.annotation-card {
+    background-color: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 18px;
+    padding: 8px;
+    margin-bottom: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    box-shadow: 0px 0px 1px rgba(0, 0, 0, 0.5);
+    cursor: pointer;
+    transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+.annotation-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.annotation-original {
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 18px;
+}
+
+.annotation-quick-add-btn {
+    font-size: 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.annotation-quick-add-btn:hover {
+    color: var(--text-normal);
+    background-color: var(--background-modifier-hover);
+}
+
+.annotation-comment-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 20px;
+    border: 1px solid transparent;
+    transition: background-color 0.2s, border-color 0.2s;
+    cursor: pointer;
+}
+
+.annotation-comment-row:hover {
+    background-color: var(--background-modifier-hover);
+    border-color: var(--background-modifier-border-hover);
+}
+
+/* =========================================
+   极致极简 Checkbox 设计 (必须用 important 覆盖原生)
+   ========================================= */
+.annotation-checkbox,
+.annotation-checkbox:checked {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+    width: 16px !important;
+    height: 16px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+    border-radius: 50% !important;
+    border: 1.5px solid var(--text-faint) !important;
+    position: relative !important;
+    flex-shrink: 0 !important;
+    transition: border-color 0.25s ease !important;
+}
+
+.annotation-checkbox::after,
+.annotation-checkbox:checked::after {
+    display: none !important;
+}
+
+.annotation-checkbox:checked {
+    border-color: var(--dynamic-color, var(--interactive-accent)) !important;
+}
+
+.annotation-comment-row:hover .annotation-checkbox:not(:checked) {
+    border-color: var(--text-muted) !important;
+}
+
+.annotation-checkbox::before {
+    content: "" !important;
+    width: 9px !important;
+    height: 9px !important;
+    border-radius: 50% !important;
+    background: var(--dynamic-color, var(--interactive-accent)) !important;
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) scale(0) !important;
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+}
+
+.annotation-checkbox:checked::before {
+    transform: translate(-50%, -50%) scale(1) !important;
+}
+
+.annotation-comment-text {
+    flex: 1;
+    font-size: 14px;
+    line-height: 1.4;
+    color: var(--text-muted);
+    user-select: none;
+    transition: all 0.2s ease;
+}
+
+/* =========================================
+   设置面板与模态框 UI
+   ========================================= */
+.color-picker-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    padding: 15px 10px;
+    justify-content: center;
+}
+
+.color-picker-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid var(--background-modifier-border);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.color-picker-btn:hover {
+    transform: scale(1.2);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    border-color: var(--text-normal);
+}
+
+.setting-section-header {
+    margin-top: 2.5em;
+    padding-bottom: 0.5em;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.color-preset-section {
+    margin-top: 30px;
+    background-color: var(--background-secondary);
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid var(--background-modifier-border);
+}
+
+.color-preset-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.color-preset-header h3 {
+    margin: 0;
+}
+
+.color-preset-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 15px 20px;
+}
+
+.color-preset-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background-color: var(--background-primary);
+    padding: 8px 12px;
+    border-radius: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.color-preset-item input[type="text"] {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 2px 4px;
+    width: 60px;
+    font-size: 13px;
+    color: var(--text-normal);
+}
+
+.color-preset-item input[type="text"]:focus {
+    border-bottom: 1px solid var(--interactive-accent);
+}
+
+.color-circle-input {
+    -webkit-appearance: none;
+    border: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    padding: 0;
+    overflow: hidden;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 1px var(--background-modifier-border);
+}
+
+.color-circle-input::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.color-circle-input::-webkit-color-swatch {
+    border: none;
+    border-radius: 50%;
+}
+
+.color-hex-input.color-hex-input {
+    width: 75px;
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--text-muted);
+    background-color: var(--background-secondary-alt);
+    border-radius: 12px;
+    padding: 4px 8px;
+}
+
+.color-preset-del {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-faint);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    margin-left: auto;
+}
+
+.color-preset-del:hover {
+    color: var(--text-error);
+    background-color: var(--background-modifier-error-hover);
+}
+
+.color-preset-del svg {
+    width: 14px;
+    height: 14px;
+}
+
+.annotation-confirm-msg {
+    margin-bottom: 20px;
+    font-size: 14px;
+    color: var(--text-normal);
+}

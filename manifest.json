@@ -3,7 +3,7 @@
 	"name": "写作的标注",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "标注与脚注",
+	"description": "标注与脚注,适合小说作者用的大纲细纲的标注插件",
 	"author": "hornat",
 	"authorUrl": "",
 	"isDesktopOnly": false
