@@ -84,7 +84,7 @@
    脚注美化开关 (通过 Body Class 挂载)
    ========================================= */
 .footnote-beautify-enabled div.popover-titlebar {
-    display: none ;
+    display: none;
 }
 
 .footnote-beautify-enabled .popover.hover-popover .markdown-preview-view {
@@ -93,12 +93,12 @@
 }
 
 .footnote-beautify-enabled .popover.hover-popover .cm-editor {
-    font-size: 1.7em ;
+    font-size: 1.7em;
 }
 
 .footnote-beautify-enabled .popover.hover-popover.is-editing {
-    outline: none ;
-    border: none ;
+    outline: none;
+    border: none;
 }
 
 .footnote-beautify-enabled .markdown-source-view:not(.is-source-mode) span.cm-footref.cm-hmd-barelink:last-child::after {
@@ -111,21 +111,21 @@
 }
 
 .footnote-beautify-enabled .markdown-source-view:not(.is-source-mode) span.cm-footref.cm-hmd-barelink {
-    font-size: 8px ;
-    line-height: 3 ;
+    font-size: 8px;
+    line-height: 3;
     color: #1E1E1E;
-    margin: 0 ;
-    padding: 0 ;
+    margin: 0;
+    padding: 0;
     position: relative;
     display: inline-block;
 }
 
 .footnote-beautify-enabled .markdown-source-view:not(.is-source-mode) span.cm-footref.cm-hmd-barelink::before {
-    content: none ;
+    content: none;
 }
 
 .footnote-beautify-enabled .markdown-source-view:not(.is-source-mode) span.cm-footref.cm-hmd-barelink:not(:last-child)::after {
-    content: none ;
+    content: none;
 }
 
 /* =========================================
@@ -238,51 +238,51 @@
    ========================================= */
 .annotation-checkbox,
 .annotation-checkbox:checked {
-    appearance: none ;
-    -webkit-appearance: none ;
-    background: transparent ;
-    box-shadow: none ;
-    outline: none ;
-    width: 16px ;
-    height: 16px ;
-    margin: 0 ;
-    padding: 0 ;
-    box-sizing: border-box ;
-    border-radius: 50% ;
-    border: 1.5px solid var(--text-faint) ;
-    position: relative ;
-    flex-shrink: 0 ;
-    transition: border-color 0.25s ease ;
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent !important;
+    box-shadow: none;
+    outline: none;
+    width: 16px !important;
+    height: 16px !important;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    border-radius: 50%;
+    border: 1.5px solid var(--text-faint);
+    position: relative;
+    flex-shrink: 0;
+    transition: border-color 0.25s ease;
 }
 
 .annotation-checkbox::after,
 .annotation-checkbox:checked::after {
-    display: none ;
+    display: none !important;
 }
 
 .annotation-checkbox:checked {
-    border-color: var(--dynamic-color, var(--interactive-accent)) ;
+    border-color: var(--dynamic-color, var(--interactive-accent));
 }
 
 .annotation-comment-row:hover .annotation-checkbox:not(:checked) {
-    border-color: var(--text-muted) ;
+    border-color: var(--text-muted);
 }
 
 .annotation-checkbox::before {
-    content: "" ;
-    width: 9px ;
-    height: 9px ;
-    border-radius: 50% ;
-    background: var(--dynamic-color, var(--interactive-accent)) ;
-    position: absolute ;
-    top: 50% ;
-    left: 50% ;
-    transform: translate(-50%, -50%) scale(0) ;
-    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) ;
+    content: "";
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--dynamic-color, var(--interactive-accent));
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .annotation-checkbox:checked::before {
-    transform: translate(-50%, -50%) scale(1) ;
+    transform: translate(-50%, -50%) scale(1);
 }
 
 .annotation-comment-text {
