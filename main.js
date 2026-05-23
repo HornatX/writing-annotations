@@ -475,7 +475,8 @@ var FootnoteListView = class extends import_obsidian.ItemView {
       this.listRoot.empty();
       const isCollapsed = this.plugin.settings.isAnnotationsCollapsed;
       this.listRoot.classList.toggle("annotations-collapsed-mode", !!isCollapsed);
-      const listContainer = this.listRoot.createDiv({ cls: "footnote-compass-container" });
+      const fragment = document.createDocumentFragment();
+      const listContainer = fragment.createDiv({ cls: "footnote-compass-container" });
       if (this.cachedRefs.length > 0) {
         let displayRefs = [...this.cachedRefs];
         if (this.plugin.settings.isSortByKey) {
@@ -492,39 +493,62 @@ var FootnoteListView = class extends import_obsidian.ItemView {
       }
       const filePath = this.lastActiveView?.file?.path;
       if (filePath && this.plugin.annoManager.data[filePath]?.length > 0) {
-        const headerContainer = this.listRoot.createDiv({ cls: "annotation-section-header" });
+        const headerContainer = fragment.createDiv({ cls: "annotation-section-header" });
         headerContainer.createDiv({ cls: "annotation-divider", text: "\u{1F4CC} \u6587\u672C\u53D8\u4F53\u6807\u6CE8" });
         const rightControls = headerContainer.createDiv({
-          attr: { style: "display: flex; align-items: center; gap: 8px;" }
+          attr: { style: "display: flex; align-items: center; gap: 4px;" }
         });
         const filterLvlStr = this.plugin.settings.headingFilters[filePath] || "0";
-        const headingSelect = rightControls.createEl("select", { cls: "heading-filter-select" });
-        const headingOptions = [
-          { v: "0", t: "\u65E0" },
-          { v: "1", t: "H1" },
-          { v: "2", t: "H2" },
-          { v: "3", t: "H3" },
-          { v: "4", t: "H4" },
-          { v: "5", t: "H5" },
-          { v: "6", t: "H6" }
-        ];
-        headingOptions.forEach((opt) => {
-          const opEl = headingSelect.createEl("option", { text: opt.t, value: opt.v });
-          if (opt.v === filterLvlStr) opEl.selected = true;
+        const headingMap = { "0": "\u65E0", "1": "H1", "2": "H2", "3": "H3", "4": "H4", "5": "H5", "6": "H6" };
+        const headingBtn = rightControls.createEl("button", {
+          text: `${headingMap[filterLvlStr]} \u25BE`,
+          cls: "compass-ui-btn"
         });
-        headingSelect.onchange = async () => {
-          this.plugin.settings.headingFilters[filePath] = headingSelect.value;
-          await this.plugin.saveSettings();
-          this._lastStateHash = "";
-          if (this.lastActiveView) {
-            this.checkAndUpdate();
-          } else {
-            this.renderRefList();
-          }
+        headingBtn.onclick = (e) => {
+          const menu = new import_obsidian.Menu();
+          Object.entries(headingMap).forEach(([val, text]) => {
+            menu.addItem((item) => {
+              item.setTitle(text).setChecked(val === filterLvlStr).onClick(async () => {
+                this.plugin.settings.headingFilters[filePath] = val;
+                await this.plugin.saveSettings();
+                this._lastStateHash = "";
+                if (this.lastActiveView) {
+                  this.checkAndUpdate();
+                } else {
+                  this.renderRefList();
+                }
+              });
+            });
+          });
+          menu.showAtMouseEvent(e);
+        };
+        const displayModeStr = this.plugin.settings.displayModes[filePath] || "original";
+        const modeMap = { "original": "\u6807\u9898", "variant": "\u53D8\u4F53", "both": "\u540C\u65F6" };
+        const displayModeBtn = rightControls.createEl("button", {
+          text: `${modeMap[displayModeStr]} \u25BE`,
+          cls: "compass-ui-btn"
+        });
+        displayModeBtn.onclick = (e) => {
+          const menu = new import_obsidian.Menu();
+          Object.entries(modeMap).forEach(([val, text]) => {
+            menu.addItem((item) => {
+              item.setTitle(text).setChecked(val === displayModeStr).onClick(async () => {
+                this.plugin.settings.displayModes[filePath] = val;
+                await this.plugin.saveSettings();
+                this._lastStateHash = "";
+                if (this.lastActiveView) {
+                  this.checkAndUpdate();
+                } else {
+                  this.renderRefList();
+                }
+              });
+            });
+          });
+          menu.showAtMouseEvent(e);
         };
         const toggleBtn = rightControls.createEl("button", {
           text: isCollapsed ? "\u5C55\u5F00" : "\u6298\u53E0",
-          cls: "annotation-toggle-btn"
+          cls: "compass-ui-btn"
         });
         toggleBtn.onclick = async () => {
           this.plugin.settings.isAnnotationsCollapsed = !isCollapsed;
@@ -563,14 +587,14 @@ var FootnoteListView = class extends import_obsidian.ItemView {
             }
             const hText = nearestHeading ? nearestHeading.text : "\u65E0\u6807\u9898 / \u9876\u90E8";
             if (hText !== currentHeadingText) {
-              const hDivider = this.listRoot.createDiv({ cls: "annotation-heading-divider", text: hText });
+              const hDivider = fragment.createDiv({ cls: "annotation-heading-divider", text: hText });
               hDivider.style.color = this.plugin.settings.headingColor || "#2196f3";
               currentHeadingText = hText;
               isNewHeadingBlock = true;
             }
           }
           if (targetLvl === 0 || isNewHeadingBlock || !currentGroupWrapper) {
-            currentGroupWrapper = this.listRoot.createDiv({
+            currentGroupWrapper = fragment.createDiv({
               cls: "annotation-group-wrapper"
             });
           }
@@ -666,7 +690,12 @@ var FootnoteListView = class extends import_obsidian.ItemView {
             menu.showAtMouseEvent(e);
           };
           const header = card.createDiv({ cls: "annotation-header" });
-          const originalSpan = header.createSpan({ text: anno.original, cls: "annotation-original" });
+          header.dataset.displayMode = displayModeStr;
+          const checkedComment = (anno.comments || []).find((c) => c.checked);
+          const variantText = checkedComment ? checkedComment.text : "\u672A\u9009\u62E9\u53D8\u4F53";
+          header.createSpan({ text: anno.original, cls: "anno-title-text anno-text-original" });
+          header.createSpan({ text: variantText, cls: "anno-title-text anno-text-variant" });
+          header.createSpan({ text: `${anno.original}\uFF1A${variantText}`, cls: "anno-title-text anno-text-both" });
           const list = card.createDiv({ cls: "annotation-comments-list" });
           (anno.comments || []).forEach((comment) => {
             const row = list.createDiv({ cls: "annotation-comment-row" });
@@ -730,8 +759,9 @@ var FootnoteListView = class extends import_obsidian.ItemView {
         });
       }
       if (this.cachedRefs.length === 0 && (!this.plugin.annoManager.data[filePath || ""] || this.plugin.annoManager.data[filePath || ""].length === 0)) {
-        this.listRoot.createDiv({ cls: "footnote-empty", text: "\u5F53\u524D\u6587\u6863\u65E0\u811A\u6CE8\u6216\u6807\u6CE8" });
+        fragment.createDiv({ cls: "footnote-empty", text: "\u5F53\u524D\u6587\u6863\u65E0\u811A\u6CE8\u6216\u6807\u6CE8" });
       }
+      this.listRoot.appendChild(fragment);
     } catch (err) {
       console.error("FootnoteCompass \u4FA7\u8FB9\u680F\u6E32\u67D3\u4E25\u91CD\u9519\u8BEF:", err);
       this.listRoot.createDiv({ cls: "footnote-empty", text: "\u26A0\uFE0F \u4FA7\u8FB9\u680F\u52A0\u8F7D\u9047\u5230\u5F02\u5E38\uFF0C\u8BF7\u68C0\u67E5\u63A7\u5236\u53F0\u6216\u91CD\u542F\u63D2\u4EF6\u3002" });
@@ -955,6 +985,8 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
       defaultPhantomColor: "#009dff",
       colorPresets: defaultPresets,
       headingFilters: {},
+      displayModes: {},
+      // ✨ 新增：默认值
       headingColor: "#2196f3"
       // 新增：默认标题颜色（蓝色）
     }, loadedData);

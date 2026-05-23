@@ -52,7 +52,6 @@
 }
 
 .footnote-key {
-    font-weight: bold;
     color: var(--text-accent);
     flex-shrink: 0;
     display: none;
@@ -77,7 +76,6 @@
 
 .footnote-item.is-active .footnote-content {
     color: rgb(0, 157, 255);
-    font-weight: bold;
 }
 
 /* =========================================
@@ -161,7 +159,6 @@
     margin: 0;
     padding: 0;
     font-size: 13px;
-    font-weight: bold;
     color: var(--text-muted);
 }
 
@@ -196,12 +193,6 @@
     align-items: center;
 }
 
-.annotation-original {
-    font-weight: bold;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 18px;
-}
 
 .annotation-quick-add-btn {
     font-size: 12px;
@@ -432,81 +423,47 @@
     font-size: 14px;
     color: var(--text-normal);
 }
-/* =========================================
-   新增：标题层级下拉框样式 (极致极简，跟正文一致)
-   ========================================= */
-.heading-filter-select {
-    appearance: none;          /* 移除系统默认的下拉小箭头 */
-    -webkit-appearance: none;
-    background: transparent ;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0px 4px ;
-    font-size: 13px ;
-    color: var(--text-muted) ;
-    cursor: pointer;
-    outline: none;
-    transition: color 0.15s ease;
-}
 
-.heading-filter-select:hover {
-    color: var(--text-normal) ; /* 鼠标悬停时变亮 */
-}
 
-/* =========================================
-   新增：大纲折叠按钮样式 (极致极简，跟正文一致)
-   ========================================= */
-.annotation-toggle-btn {
-    background: transparent !important;
-    border: none ;
-    box-shadow: none !important;
-    padding: 0px 4px ;
-    font-size: 13px ;
-    color: var(--text-muted) ;
-    cursor: pointer;
-    outline: none;
-    transition: color 0.15s ease;
-}
+
+
 
 .annotation-toggle-btn:hover {
     color: var(--text-normal) !important; /* 鼠标悬停时变亮 */
-}
-/* =========================================
-   新增：大纲标题分割线样式
+}/* =========================================
+   大纲标题分割线与卡片组
    ========================================= */
 .annotation-heading-divider {
     margin: 15px 0 8px 0;
     font-size: 15px;
-    font-weight: bold;
     color: var(--text-accent);
     padding-bottom: 4px;
 }
 
-/* =========================================
-   新增：卡片包裹组 (缝合相同状态的卡片)
-   ========================================= */
 .annotation-group-wrapper {
     border: 1px solid var(--background-modifier-border);
     border-radius: 12px;
     margin-bottom: 10px;
     background-color: var(--background-secondary);
-    box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.05);
-    overflow: hidden; /* 防止内部元素超出圆角 */
+    box-shadow: 1px 1px 0px rgba(0, 0, 0, 0.3); /* 合并了重复的 box-shadow */
+    overflow: hidden; 
     display: flex;
     flex-direction: column;
 }
 
-/* 视觉暗示：如果是已展开/已勾选项目的组，可以微微提亮一点点（可选） */
 .annotation-group-wrapper.group-checked {
     border-color: var(--interactive-accent-muted, var(--background-modifier-border));
 }
 
+.annotation-group-wrapper .annotation-card {
+    border-bottom: none !important; /* 隐藏内部卡片的横分割线 */
+}
+
 /* =========================================
-   重构：变体标注卡片 UI (去除旧边框，依托包裹组)
+   重构：变体标注卡片 UI
    ========================================= */
 .annotation-card {
     padding: 8px 10px;
-    /* 取消卡片自身的独立边框和圆角，交给 Wrapper 处理 */
     border: none;
     border-radius: 0;
     margin-bottom: 0;
@@ -520,57 +477,78 @@
     border-bottom: 1px solid var(--background-modifier-border);
 }
 
-/* 最后一个卡片不需要底部横线 */
 .annotation-group-wrapper .annotation-card:last-child {
     border-bottom: none;
 }
 
-
-.annotation-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-/* 修改：去除了恶心的背景色，只保留加粗和字号 */
-.annotation-original {
-    font-weight: bold;
-    font-size: 16px;
-    color: var(--text-normal);
-    padding: 2px 0;
-}
-
-
-
 /* =========================================
-   自定义修正：隐藏内部分割线 & 解决文字位移
+   自定义修正：解决文字位移
    ========================================= */
-
-/* 1. 隐藏内部卡片的横分割线（只保留 .annotation-group-wrapper 的大外框） */
-.annotation-group-wrapper .annotation-card {
-    border-bottom: none !important;
-}
-
-/* 2. 移除选中状态时的文字位移（强制覆盖 JS 写入的加粗效果） */
 .annotation-comment-row .annotation-comment-text {
     font-weight: normal !important; 
 }
-
-/* （可选黑科技）如果你希望选中的文字"看起来"是加粗的，但又绝对不发生位移，
-   可以保留下面这段代码。它利用文字描边来模拟加粗，不会改变文字原本占据的宽度大小 */
 .annotation-comment-row .annotation-comment-text[style*="font-weight: bold"] {
     font-weight: normal !important;
     -webkit-text-stroke: 0.35px currentColor; /* 模拟加粗且不改变宽度 */
 }
 
 /* =========================================
-   新增：卡片包裹组 (缝合相同状态的卡片)
+   容器内边距优化 (合并了重复定义)
    ========================================= */
-.annotation-group-wrapper {
-    box-shadow: 1px 1px 0px rgba(0, 0, 0, 0.3) ;
-
-
+.footnote-list-root {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 10px 10px 10px; 
 }
+
+.footnote-compass-container {
+    padding: 0px;
+    margin-top: 10px; 
+}
+.footnote-compass-container:empty {
+    display: none;
+}
+
+/* =========================================
+   控制栏按钮样式 (极致极简)
+   ========================================= */
+.compass-ui-btn {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 2px 6px !important;
+    border-radius: 4px;
+    font-size: 13px;
+    color: var(--text-muted);
+    cursor: pointer;
+    outline: none;
+    transition: all 0.15s ease;
+}
+
+.compass-ui-btn:hover {
+    color: var(--text-normal) !important;
+    background-color: var(--background-modifier-hover) !important;
+}
+
+/* =========================================
+   折叠模式动态标题切换机制
+   ========================================= */
+.anno-title-text {
+    display: none; 
+    font-size: 16px;
+    color: var(--text-normal); 
+    padding: 2px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.anno-text-original { display: block; }
+.annotations-collapsed-mode .annotation-card:not(.is-active) .annotation-header[data-display-mode="variant"] .anno-text-original { display: none; }
+.annotations-collapsed-mode .annotation-card:not(.is-active) .annotation-header[data-display-mode="variant"] .anno-text-variant { display: block; }
+.annotations-collapsed-mode .annotation-card:not(.is-active) .annotation-header[data-display-mode="both"] .anno-text-original { display: none; }
+.annotations-collapsed-mode .annotation-card:not(.is-active) .annotation-header[data-display-mode="both"] .anno-text-both { display: block; }
+
 
 
 

@@ -25,6 +25,7 @@ export interface FootnoteCompassSettings {
     defaultPhantomColor: string;
     colorPresets: ColorPreset[];
     headingFilters: Record<string, string>; // 新增：保存每个文件的标题过滤偏好
+    displayModes: Record<string, string>; // ✨ 新增：保存每个文件的“标题显示模式”偏好
     headingColor: string; // 新增：侧边栏分类标题颜色
 }
 
@@ -429,7 +430,7 @@ class FootnoteListView extends ItemView {
         const triggerNavLock = () => {
             this.isNavigating = true;
             setTimeout(() => { this.isNavigating = false; }, 800);
-            /*this.debouncedSync();*/   /*  不要删这个禁用光标判定*/ 
+            /*this.debouncedSync();*/   /*  不要删这个禁用光标判定*/
         };
 
         const workspaceEl = this.app.workspace.containerEl;
@@ -448,7 +449,7 @@ class FootnoteListView extends ItemView {
                         return;
                     }
                 }
-                
+
                 // 2. 失去焦点兜底：如果焦点在侧边栏，遍历寻找真正发生滚动的那个正文窗口
                 const leaves = this.app.workspace.getLeavesOfType('markdown');
                 for (let leaf of leaves) {
@@ -552,7 +553,10 @@ class FootnoteListView extends ItemView {
             const isCollapsed = this.plugin.settings.isAnnotationsCollapsed;
             this.listRoot.classList.toggle("annotations-collapsed-mode", !!isCollapsed);
 
-            const listContainer = this.listRoot.createDiv({ cls: "footnote-compass-container" });
+            // ✨ 优化：使用离线文档碎片(DocumentFragment) 避免频繁触发浏览器重排，大幅提高长文渲染性能
+            const fragment = document.createDocumentFragment();
+
+            const listContainer = fragment.createDiv({ cls: "footnote-compass-container" });
 
             if (this.cachedRefs.length > 0) {
                 let displayRefs = [...this.cachedRefs];
@@ -572,45 +576,71 @@ class FootnoteListView extends ItemView {
 
             const filePath = this.lastActiveView?.file?.path;
             if (filePath && this.plugin.annoManager.data[filePath]?.length > 0) {
-                const headerContainer = this.listRoot.createDiv({ cls: "annotation-section-header" });
+                const headerContainer = fragment.createDiv({ cls: "annotation-section-header" });
 
                 // 左侧：固定标题
                 headerContainer.createDiv({ cls: "annotation-divider", text: "📌 文本变体标注" });
 
-                // 右侧控制区：下拉框 + 按钮放在一行
+                // 右侧控制区
                 const rightControls = headerContainer.createDiv({
-                    attr: { style: "display: flex; align-items: center; gap: 8px;" }
+                    attr: { style: "display: flex; align-items: center; gap: 4px;" }
                 });
 
+                // --- 1. 层级过滤：从原生Select改为优雅的Obsidian官方Menu ---
                 const filterLvlStr = this.plugin.settings.headingFilters[filePath] || "0";
-                const headingSelect = rightControls.createEl("select", { cls: "heading-filter-select" });
-                const headingOptions = [
-                    { v: "0", t: "无" }, { v: "1", t: "H1" }, { v: "2", t: "H2" },
-                    { v: "3", t: "H3" }, { v: "4", t: "H4" }, { v: "5", t: "H5" }, { v: "6", t: "H6" }
-                ];
-                headingOptions.forEach(opt => {
-                    const opEl = headingSelect.createEl("option", { text: opt.t, value: opt.v });
-                    if (opt.v === filterLvlStr) opEl.selected = true;
+                const headingMap: Record<string, string> = { "0": "无", "1": "H1", "2": "H2", "3": "H3", "4": "H4", "5": "H5", "6": "H6" };
+                
+                const headingBtn = rightControls.createEl("button", { 
+                    text: `${headingMap[filterLvlStr]} ▾`, 
+                    cls: "compass-ui-btn" 
                 });
-
-                headingSelect.onchange = async () => {
-                    this.plugin.settings.headingFilters[filePath] = headingSelect.value;
-                    await this.plugin.saveSettings();
-                    this._lastStateHash = "";
-                    // ✨ 修复需求 4：改变标题后不应该折叠丢失焦点，调用 checkAndUpdate 可保证重新同步高亮
-                    if (this.lastActiveView) {
-                        this.checkAndUpdate();
-                    } else {
-                        this.renderRefList();
-                    }
+                headingBtn.onclick = (e) => {
+                    const menu = new Menu();
+                    Object.entries(headingMap).forEach(([val, text]) => {
+                        menu.addItem((item) => {
+                            item.setTitle(text)
+                                .setChecked(val === filterLvlStr)
+                                .onClick(async () => {
+                                    this.plugin.settings.headingFilters[filePath] = val;
+                                    await this.plugin.saveSettings();
+                                    this._lastStateHash = "";
+                                    if (this.lastActiveView) { this.checkAndUpdate(); } else { this.renderRefList(); }
+                                });
+                        });
+                    });
+                    menu.showAtMouseEvent(e);
                 };
 
-                // 给按钮挂上 class 类名，不再使用 JS 直接写样式
-                const toggleBtn = rightControls.createEl("button", { 
-                    text: isCollapsed ? "展开" : "折叠",
-                    cls: "annotation-toggle-btn"
+                // --- 2. 显示模式：从原生Select改为优雅的Obsidian官方Menu ---
+                const displayModeStr = this.plugin.settings.displayModes[filePath] || "original";
+                const modeMap: Record<string, string> = { "original": "标题", "variant": "变体", "both": "同时" };
+                
+                const displayModeBtn = rightControls.createEl("button", { 
+                    text: `${modeMap[displayModeStr]} ▾`, 
+                    cls: "compass-ui-btn" 
                 });
+                displayModeBtn.onclick = (e) => {
+                    const menu = new Menu();
+                    Object.entries(modeMap).forEach(([val, text]) => {
+                        menu.addItem((item) => {
+                            item.setTitle(text)
+                                .setChecked(val === displayModeStr)
+                                .onClick(async () => {
+                                    this.plugin.settings.displayModes[filePath] = val;
+                                    await this.plugin.saveSettings();
+                                    this._lastStateHash = "";
+                                    if (this.lastActiveView) { this.checkAndUpdate(); } else { this.renderRefList(); }
+                                });
+                        });
+                    });
+                    menu.showAtMouseEvent(e);
+                };
 
+                // --- 3. 折叠/展开按钮 ---
+                const toggleBtn = rightControls.createEl("button", {
+                    text: isCollapsed ? "展开" : "折叠",
+                    cls: "compass-ui-btn"
+                });
                 toggleBtn.onclick = async () => {
                     this.plugin.settings.isAnnotationsCollapsed = !isCollapsed;
                     await this.plugin.saveSettings();
@@ -653,23 +683,18 @@ class FootnoteListView extends ItemView {
                                 break;
                             }
                         }
-                        // ★ 修改：去掉了 '#' 符号，只保留纯文本
                         const hText = nearestHeading ? nearestHeading.text : "无标题 / 顶部";
 
                         if (hText !== currentHeadingText) {
-                            const hDivider = this.listRoot!.createDiv({ cls: "annotation-heading-divider", text: hText });
-                            // ★ 新增：应用你在设置面板里配置的标题颜色
+                            const hDivider = fragment.createDiv({ cls: "annotation-heading-divider", text: hText });
                             hDivider.style.color = this.plugin.settings.headingColor || "#2196f3";
-
                             currentHeadingText = hText;
                             isNewHeadingBlock = true;
                         }
                     }
 
-                    // ✨ 优化：如果选择了"无"(targetLvl === 0)，则强制每个项目都拥有独立的独立外框；
-                    // 否则，按同标题归拢在同一个外框内。
                     if (targetLvl === 0 || isNewHeadingBlock || !currentGroupWrapper) {
-                        currentGroupWrapper = this.listRoot!.createDiv({
+                        currentGroupWrapper = fragment.createDiv({
                             cls: "annotation-group-wrapper"
                         });
                     }
@@ -692,6 +717,7 @@ class FootnoteListView extends ItemView {
 
                     card.oncontextmenu = (e) => {
                         e.stopPropagation();
+                        // (这里保持你原来的菜单逻辑不变)
                         const menu = new Menu();
                         menu.addItem((item) => {
                             item.setTitle("添加新变体").setIcon("list-plus").onClick(() => {
@@ -759,9 +785,14 @@ class FootnoteListView extends ItemView {
                     };
 
                     const header = card.createDiv({ cls: "annotation-header" });
+                    header.dataset.displayMode = displayModeStr;
 
-                    // --- 需求 1：移除原来的背景色和强行颜色指定 ---
-                    const originalSpan = header.createSpan({ text: anno.original, cls: "annotation-original" });
+                    const checkedComment = (anno.comments || []).find(c => c.checked);
+                    const variantText = checkedComment ? checkedComment.text : "未选择变体";
+
+                    header.createSpan({ text: anno.original, cls: "anno-title-text anno-text-original" });
+                    header.createSpan({ text: variantText, cls: "anno-title-text anno-text-variant" });
+                    header.createSpan({ text: `${anno.original}：${variantText}`, cls: "anno-title-text anno-text-both" });
 
                     const list = card.createDiv({ cls: "annotation-comments-list" });
 
@@ -822,8 +853,12 @@ class FootnoteListView extends ItemView {
             }
 
             if (this.cachedRefs.length === 0 && (!this.plugin.annoManager.data[filePath || ""] || this.plugin.annoManager.data[filePath || ""].length === 0)) {
-                this.listRoot.createDiv({ cls: "footnote-empty", text: "当前文档无脚注或标注" });
+                fragment.createDiv({ cls: "footnote-empty", text: "当前文档无脚注或标注" });
             }
+
+            // ✨ 优化：一次性将所有组装好的 DOM 挂载，彻底解决滚动和渲染卡顿
+            this.listRoot.appendChild(fragment);
+
         } catch (err) {
             console.error("FootnoteCompass 侧边栏渲染严重错误:", err);
             this.listRoot.createDiv({ cls: "footnote-empty", text: "⚠️ 侧边栏加载遇到异常，请检查控制台或重启插件。" });
@@ -1027,7 +1062,7 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
                 color.setValue(this.plugin.settings[settingKey] as string).onChange(async (val) => {
                     (this.plugin.settings as any)[settingKey] = val;
                     if (textComp) textComp.setValue(val);
-                    await this.plugin.saveSettings(); 
+                    await this.plugin.saveSettings();
                     updateEditorDecorations(this.plugin);
                     this.forceRefreshSidebar(); // ✨ 立即刷新侧边栏颜色
                 });
@@ -1038,7 +1073,7 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
                     val = val.trim().startsWith("#") ? val.trim() : "#" + val.trim();
                     (this.plugin.settings as any)[settingKey] = val;
                     if (/^#([0-9A-Fa-f]{3}){1,2}$/.test(val)) {
-                        if (colorComp) colorComp.setValue(val); 
+                        if (colorComp) colorComp.setValue(val);
                         updateEditorDecorations(this.plugin);
                     }
                     await this.plugin.saveSettings();
@@ -1064,6 +1099,7 @@ export default class FootnoteCompassPlugin extends Plugin {
             beautifyEnabled: false, isSortByKey: false, isAnnotationsCollapsed: true, annotationFilePath: "大纲变体标注数据库.md",
             defaultHighlightColor: "#ff4444", defaultPhantomColor: "#009dff", colorPresets: defaultPresets,
             headingFilters: {},
+            displayModes: {}, // ✨ 新增：默认值
             headingColor: "#2196f3" // 新增：默认标题颜色（蓝色）
         }, loadedData);
 
