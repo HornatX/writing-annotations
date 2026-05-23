@@ -80,9 +80,6 @@ function findAnnotationOffsetAndHeal(text, anno) {
   return null;
 }
 var FileSuggest = class extends import_obsidian.AbstractInputSuggest {
-  textInput;
-  // Any because Setting text input isn't fully exported
-  onSelectCallback;
   constructor(app, textInput, onSelect) {
     super(app, textInput.inputEl);
     this.textInput = textInput;
@@ -107,8 +104,6 @@ var PhantomWidget = class extends import_view.WidgetType {
     this.color = color;
     this.color = color || "#009dff";
   }
-  text;
-  color;
   eq(other) {
     return other.text === this.text && other.color === this.color;
   }
@@ -182,10 +177,6 @@ function updateEditorDecorations(plugin) {
   });
 }
 var AnnotationManager = class {
-  plugin;
-  data;
-  isLoaded;
-  debouncedWrite;
   constructor(plugin) {
     this.plugin = plugin;
     this.data = {};
@@ -252,9 +243,6 @@ var ColorPickerModal = class extends import_obsidian.Modal {
     this.palette = palette;
     this.onSelect = onSelect;
   }
-  titleText;
-  palette;
-  onSelect;
   onOpen() {
     this.setTitle(this.titleText);
     const container = this.contentEl.createDiv({ cls: "color-picker-container" });
@@ -279,9 +267,6 @@ var ConfirmModal = class extends import_obsidian.Modal {
     this.message = message;
     this.onConfirm = onConfirm;
   }
-  titleText;
-  message;
-  onConfirm;
   onOpen() {
     this.setTitle(this.titleText);
     this.contentEl.createEl("p", { text: this.message, cls: "annotation-confirm-msg" });
@@ -302,10 +287,6 @@ var CommentModal = class extends import_obsidian.Modal {
     this.onDelete = onDelete;
     this.result = initialVal || "";
   }
-  titleText;
-  onSubmit;
-  onDelete;
-  result;
   onOpen() {
     this.setTitle(this.titleText);
     new import_obsidian.Setting(this.contentEl).setName("\u5185\u5BB9\u6587\u5B57").setDesc("\u8F93\u5165\u53D8\u4F53\u5185\u5BB9\uFF0C\u6309\u56DE\u8F66\u952E\u76F4\u63A5\u4FDD\u5B58\u3002").addText((text) => {
@@ -343,17 +324,14 @@ var CommentModal = class extends import_obsidian.Modal {
   }
 };
 var FootnoteListView = class extends import_obsidian.ItemView {
-  plugin;
-  cachedRefs = [];
-  lastActiveView = null;
-  listRoot = null;
-  isNavigating = false;
-  _lastStateHash = "";
-  _lastScrolledItem = null;
-  debouncedSync;
-  debouncedScrollSync;
   constructor(leaf, plugin) {
     super(leaf);
+    this.cachedRefs = [];
+    this.lastActiveView = null;
+    this.listRoot = null;
+    this.isNavigating = false;
+    this._lastStateHash = "";
+    this._lastScrolledItem = null;
     this.plugin = plugin;
     this.debouncedSync = (0, import_obsidian.debounce)(() => {
       const activeLeaf = this.app.workspace.activeLeaf;
@@ -507,7 +485,35 @@ var FootnoteListView = class extends import_obsidian.ItemView {
       if (filePath && this.plugin.annoManager.data[filePath]?.length > 0) {
         const headerContainer = this.listRoot.createDiv({ cls: "annotation-section-header" });
         headerContainer.createDiv({ cls: "annotation-divider", text: "\u{1F4CC} \u6587\u672C\u53D8\u4F53\u6807\u6CE8" });
-        const toggleBtn = headerContainer.createEl("button", { text: isCollapsed ? "\u5C55\u5F00" : "\u6298\u53E0" });
+        const rightControls = headerContainer.createDiv({
+          attr: { style: "display: flex; align-items: center; gap: 8px;" }
+        });
+        const filterLvlStr = this.plugin.settings.headingFilters[filePath] || "0";
+        const headingSelect = rightControls.createEl("select", { cls: "heading-filter-select" });
+        const headingOptions = [
+          { v: "0", t: "\u65E0" },
+          { v: "1", t: "H1" },
+          { v: "2", t: "H2" },
+          { v: "3", t: "H3" },
+          { v: "4", t: "H4" },
+          { v: "5", t: "H5" },
+          { v: "6", t: "H6" }
+        ];
+        headingOptions.forEach((opt) => {
+          const opEl = headingSelect.createEl("option", { text: opt.t, value: opt.v });
+          if (opt.v === filterLvlStr) opEl.selected = true;
+        });
+        headingSelect.onchange = async () => {
+          this.plugin.settings.headingFilters[filePath] = headingSelect.value;
+          await this.plugin.saveSettings();
+          this._lastStateHash = "";
+          if (this.lastActiveView) {
+            this.checkAndUpdate();
+          } else {
+            this.renderRefList();
+          }
+        };
+        const toggleBtn = rightControls.createEl("button", { text: isCollapsed ? "\u5C55\u5F00" : "\u6298\u53E0" });
         Object.assign(toggleBtn.style, {
           padding: "2px 8px",
           fontSize: "12px",
@@ -526,13 +532,46 @@ var FootnoteListView = class extends import_obsidian.ItemView {
         const annos = [...this.plugin.annoManager.data[filePath]];
         const fullText = this.lastActiveView?.editor?.getValue() || "";
         const palette = this.plugin.settings.colorPresets || [];
+        const parsedHeadings = [];
+        if (filterLvlStr !== "0") {
+          const headingRegex = /^(#{1,6})\s+(.*)$/gm;
+          let match;
+          while ((match = headingRegex.exec(fullText)) !== null) {
+            parsedHeadings.push({ offset: match.index, level: match[1].length, text: match[2].trim() });
+          }
+        }
         annos.forEach((anno) => {
           const match = findAnnotationOffsetAndHeal(fullText, anno);
           anno._tempOffset = match ? match.start : Number.MAX_SAFE_INTEGER;
         });
         annos.sort((a, b) => (a._tempOffset || 0) - (b._tempOffset || 0));
+        let currentHeadingText = "";
+        let currentGroupWrapper = null;
+        const targetLvl = parseInt(filterLvlStr);
         annos.forEach((anno) => {
-          const card = this.listRoot.createDiv({ cls: "annotation-card" });
+          let isNewHeadingBlock = false;
+          if (targetLvl > 0) {
+            let nearestHeading = null;
+            for (let i = parsedHeadings.length - 1; i >= 0; i--) {
+              if (parsedHeadings[i].offset <= anno._tempOffset && parsedHeadings[i].level <= targetLvl) {
+                nearestHeading = parsedHeadings[i];
+                break;
+              }
+            }
+            const hText = nearestHeading ? nearestHeading.text : "\u65E0\u6807\u9898 / \u9876\u90E8";
+            if (hText !== currentHeadingText) {
+              const hDivider = this.listRoot.createDiv({ cls: "annotation-heading-divider", text: hText });
+              hDivider.style.color = this.plugin.settings.headingColor || "#2196f3";
+              currentHeadingText = hText;
+              isNewHeadingBlock = true;
+            }
+          }
+          if (targetLvl === 0 || isNewHeadingBlock || !currentGroupWrapper) {
+            currentGroupWrapper = this.listRoot.createDiv({
+              cls: "annotation-group-wrapper"
+            });
+          }
+          const card = currentGroupWrapper.createDiv({ cls: "annotation-card" });
           anno.el = card;
           const hColor = anno.highlightColor || this.plugin.settings.defaultHighlightColor;
           const pColor = anno.phantomColor || this.plugin.settings.defaultPhantomColor;
@@ -552,7 +591,7 @@ var FootnoteListView = class extends import_obsidian.ItemView {
             e.stopPropagation();
             const menu = new import_obsidian.Menu();
             menu.addItem((item) => {
-              item.setTitle("\u6DFB\u52A0\u65B0\u53D8\u4F53").setIcon("plus").onClick(() => {
+              item.setTitle("\u6DFB\u52A0\u65B0\u53D8\u4F53").setIcon("list-plus").onClick(() => {
                 new CommentModal(this.app, "\u6DFB\u52A0\u65B0\u53D8\u4F53", "", async (text) => {
                   if (!anno.comments) anno.comments = [];
                   anno.comments.push({ id: generateUUID(), text, checked: false });
@@ -589,10 +628,7 @@ var FootnoteListView = class extends import_obsidian.ItemView {
             menu.addItem((item) => {
               item.setTitle("\u91CD\u65B0\u9009\u62E9\u6587\u672C").setIcon("text-cursor").onClick(async () => {
                 const view = this.lastActiveView;
-                if (!view || !view.editor) {
-                  new import_obsidian.Notice("\u672A\u627E\u5230\u6D3B\u52A8\u7684\u7F16\u8F91\u5668\uFF01");
-                  return;
-                }
+                if (!view || !view.editor) return;
                 const editor = view.editor;
                 const selectedText = editor.getSelection();
                 if (!selectedText || selectedText.trim().length === 0) {
@@ -628,19 +664,6 @@ var FootnoteListView = class extends import_obsidian.ItemView {
           };
           const header = card.createDiv({ cls: "annotation-header" });
           const originalSpan = header.createSpan({ text: anno.original, cls: "annotation-original" });
-          originalSpan.style.color = hColor;
-          originalSpan.style.backgroundColor = hexToRgba(hColor, 0.1);
-          const addBtn = header.createDiv({ cls: "annotation-quick-add-btn", text: "\u65B0\u589E" });
-          addBtn.onclick = (e) => {
-            e.stopPropagation();
-            new CommentModal(this.app, "\u6DFB\u52A0\u65B0\u53D8\u4F53", "", async (text) => {
-              if (!anno.comments) anno.comments = [];
-              anno.comments.push({ id: generateUUID(), text, checked: false });
-              await this.plugin.annoManager.save();
-              this._lastStateHash = "";
-              this.checkAndUpdate();
-            }).open();
-          };
           const list = card.createDiv({ cls: "annotation-comments-list" });
           (anno.comments || []).forEach((comment) => {
             const row = list.createDiv({ cls: "annotation-comment-row" });
@@ -661,25 +684,8 @@ var FootnoteListView = class extends import_obsidian.ItemView {
               comment.checked = !isChecked;
               this.plugin.annoManager.save();
               updateEditorDecorations(this.plugin);
-              this._lastStateHash = this.generateStateHash(this.lastActiveView, this.cachedRefs, annos);
-              Array.from(list.children).forEach((childRow) => {
-                const htmlChild = childRow;
-                const cid = htmlChild.dataset.commentId;
-                const targetComment = anno.comments.find((c) => c.id === cid);
-                if (!targetComment) return;
-                const cb2 = htmlChild.querySelector(".annotation-checkbox");
-                const textSpan2 = htmlChild.querySelector(".annotation-comment-text");
-                if (cb2) cb2.checked = targetComment.checked;
-                if (textSpan2) {
-                  if (targetComment.checked) {
-                    textSpan2.style.color = pColor;
-                    textSpan2.style.fontWeight = "bold";
-                  } else {
-                    textSpan2.style.color = "";
-                    textSpan2.style.fontWeight = "";
-                  }
-                }
-              });
+              this._lastStateHash = "";
+              this.checkAndUpdate();
               this.syncHighlightWithCursor(this.lastActiveView);
             };
             const cb = row.createEl("input", { type: "checkbox", cls: "annotation-checkbox" });
@@ -826,10 +832,19 @@ var FootnoteListView = class extends import_obsidian.ItemView {
   }
 };
 var FootnoteCompassSettingTab = class extends import_obsidian.PluginSettingTab {
-  plugin;
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
+  }
+  // ✨ 需求 1：辅助函数，用于改变设置后强制侧边栏视图立刻刷新
+  forceRefreshSidebar() {
+    this.plugin.app.workspace.getLeavesOfType(VIEW_TYPE_FOOTNOTE).forEach((leaf) => {
+      const view = leaf.view;
+      if (view) {
+        view._lastStateHash = "";
+        view.checkAndUpdate();
+      }
+    });
   }
   display() {
     const { containerEl } = this;
@@ -850,6 +865,7 @@ var FootnoteCompassSettingTab = class extends import_obsidian.PluginSettingTab {
     containerEl.createEl("h3", { text: "\u5168\u5C40\u9ED8\u8BA4\u989C\u8272\u8BBE\u7F6E", cls: "setting-section-header" });
     this.createColorSetting(containerEl, "\u9ED8\u8BA4\u539F\u6587\u672C\u9AD8\u4EAE\u989C\u8272", "\u5F53\u521B\u5EFA\u65B0\u53D8\u4F53\u65F6\uFF0C\u6B63\u6587\u4E2D\u88AB\u5708\u5B9A\u7684\u539F\u8BCD\u9AD8\u4EAE\u989C\u8272\u3002", "defaultHighlightColor");
     this.createColorSetting(containerEl, "\u9ED8\u8BA4\u66FF\u6362\u540E\u53D8\u4F53\u989C\u8272", "\u5728\u6B63\u6587\u4E2D\u66FF\u6362\u6210\u53D8\u4F53\u6587\u5B57\u540E\u7684\u6587\u5B57\u548C\u8FB9\u6846\u989C\u8272\u3002", "defaultPhantomColor");
+    this.createColorSetting(containerEl, "\u4FA7\u8FB9\u680F\u5206\u7C7B\u6807\u9898\u989C\u8272", "\u5728\u4FA7\u8FB9\u680F\u4E2D\u57FA\u4E8EH1-H6\u5206\u7C7B\u663E\u793A\u7684\u6807\u9898\u6587\u672C\u989C\u8272\u3002", "headingColor");
     const colorSection = containerEl.createDiv({ cls: "color-preset-section" });
     const headerDiv = colorSection.createDiv({ cls: "color-preset-header" });
     headerDiv.createEl("h3", { text: "\u989C\u8272\u9884\u8BBE\u7BA1\u7406" });
@@ -897,6 +913,7 @@ var FootnoteCompassSettingTab = class extends import_obsidian.PluginSettingTab {
         if (textComp) textComp.setValue(val);
         await this.plugin.saveSettings();
         updateEditorDecorations(this.plugin);
+        this.forceRefreshSidebar();
       });
     }).addText((text) => {
       textComp = text;
@@ -908,6 +925,7 @@ var FootnoteCompassSettingTab = class extends import_obsidian.PluginSettingTab {
           updateEditorDecorations(this.plugin);
         }
         await this.plugin.saveSettings();
+        this.forceRefreshSidebar();
       });
       text.inputEl.classList.add("color-hex-input");
       text.inputEl.style.marginLeft = "8px";
@@ -915,8 +933,6 @@ var FootnoteCompassSettingTab = class extends import_obsidian.PluginSettingTab {
   }
 };
 var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
-  settings;
-  annoManager;
   async onload() {
     const defaultPresets = [
       { name: "\u7EA2\u8272", hex: "#e57373" },
@@ -934,7 +950,10 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
       annotationFilePath: "\u5927\u7EB2\u53D8\u4F53\u6807\u6CE8\u6570\u636E\u5E93.md",
       defaultHighlightColor: "#ff4444",
       defaultPhantomColor: "#009dff",
-      colorPresets: defaultPresets
+      colorPresets: defaultPresets,
+      headingFilters: {},
+      headingColor: "#2196f3"
+      // 新增：默认标题颜色（蓝色）
     }, loadedData);
     this.annoManager = new AnnotationManager(this);
     this.addSettingTab(new FootnoteCompassSettingTab(this.app, this));

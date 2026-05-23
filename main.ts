@@ -24,6 +24,8 @@ export interface FootnoteCompassSettings {
     defaultHighlightColor: string;
     defaultPhantomColor: string;
     colorPresets: ColorPreset[];
+    headingFilters: Record<string, string>; // 新增：保存每个文件的标题过滤偏好
+    headingColor: string; // 新增：侧边栏分类标题颜色
 }
 
 export interface AnnotationComment {
@@ -59,8 +61,8 @@ export interface FootnoteRef {
 
 // --- 工具：生成安全 UUID ---
 function generateUUID(): string {
-    return (typeof crypto !== 'undefined' && crypto.randomUUID) 
-        ? crypto.randomUUID() 
+    return (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
         : Date.now().toString(36) + Math.random().toString(36).substring(2);
 }
 
@@ -133,33 +135,33 @@ class FileSuggest extends AbstractInputSuggest<TFile> {
         this.textInput = textInput;
         this.onSelectCallback = onSelect;
     }
-    getSuggestions(inputStr: string): TFile[] { 
-        return this.app.vault.getMarkdownFiles().filter(f => f.path.toLowerCase().includes(inputStr.toLowerCase())); 
+    getSuggestions(inputStr: string): TFile[] {
+        return this.app.vault.getMarkdownFiles().filter(f => f.path.toLowerCase().includes(inputStr.toLowerCase()));
     }
-    renderSuggestion(file: TFile, el: HTMLElement) { 
-        el.setText(file.path); 
+    renderSuggestion(file: TFile, el: HTMLElement) {
+        el.setText(file.path);
     }
-    selectSuggestion(file: TFile) { 
-        this.textInput.setValue(file.path); 
-        if (this.onSelectCallback) this.onSelectCallback(file.path); 
-        this.close(); 
+    selectSuggestion(file: TFile) {
+        this.textInput.setValue(file.path);
+        if (this.onSelectCallback) this.onSelectCallback(file.path);
+        this.close();
     }
 }
 
 // --- CM6：变体幽灵文本 ---
 class PhantomWidget extends WidgetType {
-    constructor(public text: string, public color: string) { 
-        super(); 
-        this.color = color || "#009dff"; 
+    constructor(public text: string, public color: string) {
+        super();
+        this.color = color || "#009dff";
     }
-    eq(other: PhantomWidget) { 
-        return other.text === this.text && other.color === this.color; 
+    eq(other: PhantomWidget) {
+        return other.text === this.text && other.color === this.color;
     }
     toDOM() {
         const span = document.createElement("span");
-        span.className = "annotation-phantom"; 
+        span.className = "annotation-phantom";
         span.textContent = this.text;
-        span.style.color = this.color; 
+        span.style.color = this.color;
         span.style.borderBottomColor = this.color;
         span.style.backgroundColor = hexToRgba(this.color, 0.15);
         return span;
@@ -172,8 +174,8 @@ const annotationField = StateField.define<DecorationSet>({
     create() { return Decoration.none; },
     update(decos: DecorationSet, tr: Transaction) {
         decos = decos.map(tr.changes);
-        for (let e of tr.effects) { 
-            if (e.is(AnnotationStateEffect)) return e.value; 
+        for (let e of tr.effects) {
+            if (e.is(AnnotationStateEffect)) return e.value;
         }
         return decos;
     },
@@ -183,16 +185,16 @@ const annotationField = StateField.define<DecorationSet>({
 function createAnnotationDecorations(view: EditorView, annotations: Annotation[], plugin: FootnoteCompassPlugin): DecorationSet {
     const builder = new RangeSetBuilder<Decoration>();
     const text = view.state.doc.toString();
-    const decos: {from: number, to: number, deco: Decoration}[] = [];
+    const decos: { from: number, to: number, deco: Decoration }[] = [];
     let needsSave = false;
 
     annotations.forEach(anno => {
         const match = findAnnotationOffsetAndHeal(text, anno);
         if (!match) return;
-        
+
         // 验证自愈是否发生
-        if (match.start !== text.indexOf((anno.prefix||"") + (anno.original||"") + (anno.suffix||"")) + (anno.prefix||"").length) { 
-            needsSave = true; 
+        if (match.start !== text.indexOf((anno.prefix || "") + (anno.original || "") + (anno.suffix || "")) + (anno.prefix || "").length) {
+            needsSave = true;
         }
 
         const hColor = anno.highlightColor || plugin.settings.defaultHighlightColor;
@@ -200,14 +202,14 @@ function createAnnotationDecorations(view: EditorView, annotations: Annotation[]
         const checkedComment = (anno.comments || []).find(c => c.checked);
 
         if (checkedComment) {
-            decos.push({ 
-                from: match.start, to: match.end, 
-                deco: Decoration.replace({ widget: new PhantomWidget(checkedComment.text, pColor), inclusive: false }) 
+            decos.push({
+                from: match.start, to: match.end,
+                deco: Decoration.replace({ widget: new PhantomWidget(checkedComment.text, pColor), inclusive: false })
             });
         } else {
-            decos.push({ 
-                from: match.start, to: match.end, 
-                deco: Decoration.mark({ class: "annotation-highlight", attributes: { style: `background-color: ${hexToRgba(hColor, 0.25)}; border-bottom-color: ${hColor};` } }) 
+            decos.push({
+                from: match.start, to: match.end,
+                deco: Decoration.mark({ class: "annotation-highlight", attributes: { style: `background-color: ${hexToRgba(hColor, 0.25)}; border-bottom-color: ${hColor};` } })
             });
         }
     });
@@ -245,29 +247,29 @@ class AnnotationManager {
         this.isLoaded = false;
         this.debouncedWrite = debounce(this._performWrite.bind(this), 200, true);
     }
-    
+
     async load() {
         const path = normalizePath(this.plugin.settings.annotationFilePath);
         const file = this.plugin.app.vault.getAbstractFileByPath(path);
         if (file instanceof TFile) {
             const content = await this.plugin.app.vault.read(file);
             const match = content.match(/```json\r?\n([\s\S]*?)\r?\n```/);
-            if (match) { 
-                try { 
-                    this.data = JSON.parse(match[1]); 
-                } catch (e) { 
-                    console.error("解析变体数据失败", e); 
-                } 
+            if (match) {
+                try {
+                    this.data = JSON.parse(match[1]);
+                } catch (e) {
+                    console.error("解析变体数据失败", e);
+                }
             }
         }
         this.isLoaded = true;
     }
-    
-    async save() { 
-        if (!this.isLoaded) return; 
-        this.debouncedWrite(); 
+
+    async save() {
+        if (!this.isLoaded) return;
+        this.debouncedWrite();
     }
-    
+
     // ✨ 核心保护：使用 vault.process 进行安全的原子写入
     async _performWrite() {
         if (!this.isLoaded) return;
@@ -287,28 +289,28 @@ class AnnotationManager {
             } else {
                 await this.plugin.app.vault.create(path, defaultContent);
             }
-        } catch (e) { 
-            console.error("保存标注数据失败:", e); 
+        } catch (e) {
+            console.error("保存标注数据失败:", e);
         }
     }
-    
-    async forceSave() { 
-        if (!this.isLoaded) return; 
-        await this._performWrite(); 
+
+    async forceSave() {
+        if (!this.isLoaded) return;
+        await this._performWrite();
     }
 }
 
 // --- 弹窗组件集 ---
 class ColorPickerModal extends Modal {
-    constructor(app: App, public titleText: string, public palette: ColorPreset[], public onSelect: (hex: string) => void) { 
-        super(app); 
+    constructor(app: App, public titleText: string, public palette: ColorPreset[], public onSelect: (hex: string) => void) {
+        super(app);
     }
     onOpen() {
         this.setTitle(this.titleText);
         const container = this.contentEl.createDiv({ cls: "color-picker-container" });
         this.palette.forEach(color => {
             const btn = container.createDiv({ cls: "color-picker-btn" });
-            btn.style.backgroundColor = color.hex; 
+            btn.style.backgroundColor = color.hex;
             btn.title = color.name;
             btn.onclick = () => { this.onSelect(color.hex); this.close(); };
         });
@@ -317,8 +319,8 @@ class ColorPickerModal extends Modal {
 }
 
 class ConfirmModal extends Modal {
-    constructor(app: App, public titleText: string, public message: string, public onConfirm: () => void) { 
-        super(app); 
+    constructor(app: App, public titleText: string, public message: string, public onConfirm: () => void) {
+        super(app);
     }
     onOpen() {
         this.setTitle(this.titleText);
@@ -332,10 +334,10 @@ class ConfirmModal extends Modal {
 
 class CommentModal extends Modal {
     result: string;
-    
+
     constructor(app: App, public titleText: string, initialVal: string, public onSubmit: (val: string) => void, public onDelete: (() => void) | null = null) {
-        super(app); 
-        this.result = initialVal || ""; 
+        super(app);
+        this.result = initialVal || "";
     }
     onOpen() {
         this.setTitle(this.titleText);
@@ -344,34 +346,34 @@ class CommentModal extends Modal {
                 text.setValue(this.result).onChange(val => this.result = val);
                 text.inputEl.style.width = "100%";
                 text.inputEl.addEventListener("keydown", (e: KeyboardEvent) => {
-                    if (e.key === "Enter" && !e.isComposing) { 
-                        e.preventDefault(); 
-                        if (this.result.trim()) this.onSubmit(this.result.trim()); 
-                        this.close(); 
+                    if (e.key === "Enter" && !e.isComposing) {
+                        e.preventDefault();
+                        if (this.result.trim()) this.onSubmit(this.result.trim());
+                        this.close();
                     }
                 });
             });
 
         const btnSetting = new Setting(this.contentEl);
-        btnSetting.infoEl.style.display = "none"; 
-        btnSetting.controlEl.style.width = "100%"; 
-        btnSetting.controlEl.style.justifyContent = "flex-end"; 
+        btnSetting.infoEl.style.display = "none";
+        btnSetting.controlEl.style.width = "100%";
+        btnSetting.controlEl.style.justifyContent = "flex-end";
         btnSetting.settingEl.style.borderTop = "none";
-        
-        if (this.onDelete) { 
-            btnSetting.addButton(btn => { 
-                btn.setButtonText("删除变体").setWarning().onClick(() => { 
-                    this.onDelete!(); 
-                    this.close(); 
-                }); 
-                btn.buttonEl.style.marginRight = "auto"; 
-            }); 
+
+        if (this.onDelete) {
+            btnSetting.addButton(btn => {
+                btn.setButtonText("删除变体").setWarning().onClick(() => {
+                    this.onDelete!();
+                    this.close();
+                });
+                btn.buttonEl.style.marginRight = "auto";
+            });
         }
         btnSetting.addButton(btn => btn.setButtonText("取消").onClick(() => this.close()))
-                  .addButton(btn => btn.setButtonText("确认保存").setCta().onClick(() => { 
-                      if (this.result.trim()) this.onSubmit(this.result.trim()); 
-                      this.close(); 
-                  }));
+            .addButton(btn => btn.setButtonText("确认保存").setCta().onClick(() => {
+                if (this.result.trim()) this.onSubmit(this.result.trim());
+                this.close();
+            }));
     }
     onClose() { this.contentEl.empty(); }
 }
@@ -385,14 +387,14 @@ class FootnoteListView extends ItemView {
     isNavigating: boolean = false;
     _lastStateHash: string = "";
     _lastScrolledItem: any = null;
-    
+
     debouncedSync: Function;
     debouncedScrollSync: Function;
 
     constructor(leaf: WorkspaceLeaf, plugin: FootnoteCompassPlugin) {
         super(leaf);
         this.plugin = plugin;
-        
+
         this.debouncedSync = debounce(() => {
             const activeLeaf = this.app.workspace.activeLeaf;
             if (activeLeaf?.view instanceof MarkdownView) this.syncHighlightWithCursor(activeLeaf.view);
@@ -414,7 +416,7 @@ class FootnoteListView extends ItemView {
 
     async onOpen() {
         const container = this.containerEl.children[1] as HTMLElement;
-        container.empty(); 
+        container.empty();
         container.addClass("footnote-compass-view-container");
         this.listRoot = container.createDiv({ cls: "footnote-list-root" });
 
@@ -423,9 +425,9 @@ class FootnoteListView extends ItemView {
             if (target.closest('.footnote-item') || target.closest('.annotation-card')) return;
             this.showContextMenu(e);
         });
-        
+
         const triggerNavLock = () => {
-            this.isNavigating = true; 
+            this.isNavigating = true;
             setTimeout(() => { this.isNavigating = false; }, 800);
             this.debouncedSync();
         };
@@ -433,7 +435,7 @@ class FootnoteListView extends ItemView {
         const workspaceEl = this.app.workspace.containerEl;
         this.registerDomEvent(workspaceEl, 'click', triggerNavLock, { capture: true });
         this.registerDomEvent(workspaceEl, 'keyup', triggerNavLock, { capture: true });
-        
+
         this.registerDomEvent(workspaceEl, 'scroll', (e: Event) => {
             if (this.isNavigating) return;
             const target = e.target as HTMLElement;
@@ -479,20 +481,20 @@ class FootnoteListView extends ItemView {
     }
 
     async updateView(view: MarkdownView) {
-        if (!this.listRoot) return; 
-        
+        if (!this.listRoot) return;
+
         let text = "";
         if (view.editor) {
             text = view.editor.getValue();
         } else if (view.file) {
             text = await this.app.vault.read(view.file);
         }
-        
+
         if (typeof text !== "string") return;
 
         const lines = text.split("\n");
         const definitionMap = new Map<string, string>();
-        
+
         lines.forEach(line => {
             const match = line.match(/^\[\^([^\]]+)\]:\s*(.*)$/);
             if (match) definitionMap.set(match[1], match[2]);
@@ -519,7 +521,7 @@ class FootnoteListView extends ItemView {
 
         const annos = this.plugin.annoManager.data[view.file?.path || ""] || [];
         const currentHash = this.generateStateHash(view, this.cachedRefs, annos);
-        
+
         if (this._lastStateHash !== currentHash) {
             this.renderRefList();
             this._lastStateHash = currentHash;
@@ -530,10 +532,10 @@ class FootnoteListView extends ItemView {
 
     renderRefList() {
         if (!this.listRoot) return;
-        
+
         try {
             this.listRoot.empty();
-            
+
             const isCollapsed = this.plugin.settings.isAnnotationsCollapsed;
             this.listRoot.classList.toggle("annotations-collapsed-mode", !!isCollapsed);
 
@@ -558,9 +560,40 @@ class FootnoteListView extends ItemView {
             const filePath = this.lastActiveView?.file?.path;
             if (filePath && this.plugin.annoManager.data[filePath]?.length > 0) {
                 const headerContainer = this.listRoot.createDiv({ cls: "annotation-section-header" });
+
+                // 左侧：固定标题
                 headerContainer.createDiv({ cls: "annotation-divider", text: "📌 文本变体标注" });
-                const toggleBtn = headerContainer.createEl("button", { text: isCollapsed ? "展开" : "折叠" });
-                
+
+                // 右侧控制区：下拉框 + 按钮放在一行
+                const rightControls = headerContainer.createDiv({
+                    attr: { style: "display: flex; align-items: center; gap: 8px;" }
+                });
+
+                const filterLvlStr = this.plugin.settings.headingFilters[filePath] || "0";
+                const headingSelect = rightControls.createEl("select", { cls: "heading-filter-select" });
+                const headingOptions = [
+                    { v: "0", t: "无" }, { v: "1", t: "H1" }, { v: "2", t: "H2" },
+                    { v: "3", t: "H3" }, { v: "4", t: "H4" }, { v: "5", t: "H5" }, { v: "6", t: "H6" }
+                ];
+                headingOptions.forEach(opt => {
+                    const opEl = headingSelect.createEl("option", { text: opt.t, value: opt.v });
+                    if (opt.v === filterLvlStr) opEl.selected = true;
+                });
+
+                headingSelect.onchange = async () => {
+                    this.plugin.settings.headingFilters[filePath] = headingSelect.value;
+                    await this.plugin.saveSettings();
+                    this._lastStateHash = "";
+                    // ✨ 修复需求 4：改变标题后不应该折叠丢失焦点，调用 checkAndUpdate 可保证重新同步高亮
+                    if (this.lastActiveView) {
+                        this.checkAndUpdate();
+                    } else {
+                        this.renderRefList();
+                    }
+                };
+
+                const toggleBtn = rightControls.createEl("button", { text: isCollapsed ? "展开" : "折叠" });
+
                 Object.assign(toggleBtn.style, {
                     padding: "2px 8px", fontSize: "12px", cursor: "pointer",
                     backgroundColor: "transparent", border: "1px solid var(--background-modifier-border)",
@@ -570,13 +603,22 @@ class FootnoteListView extends ItemView {
                 toggleBtn.onclick = async () => {
                     this.plugin.settings.isAnnotationsCollapsed = !isCollapsed;
                     await this.plugin.saveSettings();
-                    this._lastStateHash = ""; 
+                    this._lastStateHash = "";
                     if (this.lastActiveView) this.checkAndUpdate();
                 };
 
                 const annos = [...this.plugin.annoManager.data[filePath]];
                 const fullText = this.lastActiveView?.editor?.getValue() || "";
                 const palette = this.plugin.settings.colorPresets || [];
+
+                const parsedHeadings: { offset: number, level: number, text: string }[] = [];
+                if (filterLvlStr !== "0") {
+                    const headingRegex = /^(#{1,6})\s+(.*)$/gm;
+                    let match;
+                    while ((match = headingRegex.exec(fullText)) !== null) {
+                        parsedHeadings.push({ offset: match.index, level: match[1].length, text: match[2].trim() });
+                    }
+                }
 
                 annos.forEach(anno => {
                     const match = findAnnotationOffsetAndHeal(fullText, anno);
@@ -585,15 +627,50 @@ class FootnoteListView extends ItemView {
 
                 annos.sort((a, b) => (a._tempOffset || 0) - (b._tempOffset || 0));
 
+                let currentHeadingText = "";
+                let currentGroupWrapper: HTMLElement | null = null;
+                const targetLvl = parseInt(filterLvlStr);
+
                 annos.forEach(anno => {
-                    const card = this.listRoot!.createDiv({ cls: "annotation-card" });
+                    let isNewHeadingBlock = false;
+
+                    if (targetLvl > 0) {
+                        let nearestHeading = null;
+                        for (let i = parsedHeadings.length - 1; i >= 0; i--) {
+                            if (parsedHeadings[i].offset <= anno._tempOffset! && parsedHeadings[i].level <= targetLvl) {
+                                nearestHeading = parsedHeadings[i];
+                                break;
+                            }
+                        }
+                        // ★ 修改：去掉了 '#' 符号，只保留纯文本
+                        const hText = nearestHeading ? nearestHeading.text : "无标题 / 顶部";
+
+                        if (hText !== currentHeadingText) {
+                            const hDivider = this.listRoot!.createDiv({ cls: "annotation-heading-divider", text: hText });
+                            // ★ 新增：应用你在设置面板里配置的标题颜色
+                            hDivider.style.color = this.plugin.settings.headingColor || "#2196f3";
+
+                            currentHeadingText = hText;
+                            isNewHeadingBlock = true;
+                        }
+                    }
+
+                    // ✨ 优化：如果选择了"无"(targetLvl === 0)，则强制每个项目都拥有独立的独立外框；
+                    // 否则，按同标题归拢在同一个外框内。
+                    if (targetLvl === 0 || isNewHeadingBlock || !currentGroupWrapper) {
+                        currentGroupWrapper = this.listRoot!.createDiv({
+                            cls: "annotation-group-wrapper"
+                        });
+                    }
+
+                    const card = currentGroupWrapper.createDiv({ cls: "annotation-card" });
                     anno.el = card;
                     const hColor = anno.highlightColor || this.plugin.settings.defaultHighlightColor;
                     const pColor = anno.phantomColor || this.plugin.settings.defaultPhantomColor;
 
                     card.onclick = () => {
                         if (this.lastActiveView?.editor?.offsetToPos && anno._tempOffset! < Number.MAX_SAFE_INTEGER) {
-                            this.isNavigating = true; 
+                            this.isNavigating = true;
                             setTimeout(() => { this.isNavigating = false; }, 800);
                             const pos = this.lastActiveView.editor.offsetToPos(anno._tempOffset!);
                             this.app.workspace.setActiveLeaf(this.lastActiveView.leaf, { focus: true });
@@ -606,7 +683,7 @@ class FootnoteListView extends ItemView {
                         e.stopPropagation();
                         const menu = new Menu();
                         menu.addItem((item) => {
-                            item.setTitle("添加新变体").setIcon("plus").onClick(() => {
+                            item.setTitle("添加新变体").setIcon("list-plus").onClick(() => {
                                 new CommentModal(this.app, "添加新变体", "", async (text) => {
                                     if (!anno.comments) anno.comments = [];
                                     anno.comments.push({ id: generateUUID(), text, checked: false });
@@ -635,41 +712,25 @@ class FootnoteListView extends ItemView {
                         });
                         menu.addSeparator();
 
-
-                        
                         menu.addItem((item) => {
                             item.setTitle("重新选择文本").setIcon("text-cursor").onClick(async () => {
                                 const view = this.lastActiveView;
-                                if (!view || !view.editor) {
-                                    new Notice("未找到活动的编辑器！");
-                                    return;
-                                }
-                                
+                                if (!view || !view.editor) return;
                                 const editor = view.editor;
                                 const selectedText = editor.getSelection();
-                                
-                                // 如果没有选中任何文本，给出提示
                                 if (!selectedText || selectedText.trim().length === 0) {
                                     new Notice("⚠️ 替换提示：\n请先在正文中【选中一段新文本】，然后再来点击此选项！", 4000);
                                     return;
                                 }
-                                
-                                // 获取新文本的位置上下文（用于防呆自愈机制）
                                 const cursor = editor.getCursor('from');
                                 const lineText = editor.getLine(cursor.line);
-                                
-                                // 更新标注绑定的原词、前缀、后缀和偏移量
                                 anno.original = selectedText;
                                 anno.prefix = lineText.substring(Math.max(0, cursor.ch - 10), cursor.ch);
                                 anno.suffix = lineText.substring(cursor.ch + selectedText.length, cursor.ch + selectedText.length + 10);
                                 anno.expectedOffset = editor.posToOffset(cursor);
-                                
-                                // 保存数据并刷新视图
                                 await this.plugin.annoManager.save();
                                 updateEditorDecorations(this.plugin);
-                                this._lastStateHash = ""; 
-                                this.checkAndUpdate();
-                                
+                                this._lastStateHash = ""; this.checkAndUpdate();
                                 new Notice(`✅ 绑定的原文本已成功修改为：\n"${selectedText}"`);
                             });
                         });
@@ -687,23 +748,12 @@ class FootnoteListView extends ItemView {
                     };
 
                     const header = card.createDiv({ cls: "annotation-header" });
-                    const originalSpan = header.createSpan({ text: anno.original, cls: "annotation-original" });
-                    originalSpan.style.color = hColor; 
-                    originalSpan.style.backgroundColor = hexToRgba(hColor, 0.1);
 
-                    const addBtn = header.createDiv({ cls: "annotation-quick-add-btn", text: "新增" });
-                    addBtn.onclick = (e) => {
-                        e.stopPropagation();
-                        new CommentModal(this.app, "添加新变体", "", async (text) => {
-                            if (!anno.comments) anno.comments = [];
-                            anno.comments.push({ id: generateUUID(), text, checked: false });
-                            await this.plugin.annoManager.save();
-                            this._lastStateHash = ""; this.checkAndUpdate();
-                        }).open();
-                    };
+                    // --- 需求 1：移除原来的背景色和强行颜色指定 ---
+                    const originalSpan = header.createSpan({ text: anno.original, cls: "annotation-original" });
 
                     const list = card.createDiv({ cls: "annotation-comments-list" });
-                    
+
                     (anno.comments || []).forEach(comment => {
                         const row = list.createDiv({ cls: "annotation-comment-row" });
                         row.dataset.commentId = comment.id;
@@ -716,43 +766,27 @@ class FootnoteListView extends ItemView {
                                 this.app.workspace.setActiveLeaf(this.lastActiveView.leaf, { focus: true });
                                 this.lastActiveView.setEphemeralState({ line: pos.line, cursor: { from: pos, to: pos } });
                             }
-                            
+
                             const isChecked = comment.checked;
                             anno.comments.forEach(c => c.checked = false);
                             comment.checked = !isChecked;
-                            
+
                             this.plugin.annoManager.save();
                             updateEditorDecorations(this.plugin);
-                            
-                            this._lastStateHash = this.generateStateHash(this.lastActiveView!, this.cachedRefs, annos);
-                            
-                            Array.from(list.children).forEach((childRow: Element) => {
-                                const htmlChild = childRow as HTMLElement;
-                                const cid = htmlChild.dataset.commentId;
-                                const targetComment = anno.comments.find(c => c.id === cid);
-                                if (!targetComment) return;
-                                const cb = htmlChild.querySelector('.annotation-checkbox') as HTMLInputElement;
-                                const textSpan = htmlChild.querySelector('.annotation-comment-text') as HTMLElement;
-                                if (cb) cb.checked = targetComment.checked;
-                                if (textSpan) {
-                                    if (targetComment.checked) { 
-                                        textSpan.style.color = pColor; textSpan.style.fontWeight = "bold"; 
-                                    } else { 
-                                        textSpan.style.color = ""; textSpan.style.fontWeight = ""; 
-                                    }
-                                }
-                            });
+
+                            this._lastStateHash = "";
+                            this.checkAndUpdate();
                             this.syncHighlightWithCursor(this.lastActiveView!);
                         };
 
                         const cb = row.createEl("input", { type: "checkbox", cls: "annotation-checkbox" });
-                        cb.checked = comment.checked; 
-                        cb.style.setProperty('--dynamic-color', pColor); 
+                        cb.checked = comment.checked;
+                        cb.style.setProperty('--dynamic-color', pColor);
                         cb.style.pointerEvents = "none";
 
                         const textSpan = row.createSpan({ text: comment.text, cls: "annotation-comment-text" });
-                        if (comment.checked) { 
-                            textSpan.style.color = pColor; textSpan.style.fontWeight = "bold"; 
+                        if (comment.checked) {
+                            textSpan.style.color = pColor; textSpan.style.fontWeight = "bold";
                         }
 
                         row.oncontextmenu = (e) => {
@@ -793,7 +827,7 @@ class FootnoteListView extends ItemView {
     syncHighlightToOffset(view: MarkdownView, targetOffset: number) {
         if (!view?.editor || !this.listRoot) return;
         try {
-            let allItems: {el: HTMLElement, offset: number}[] = [];
+            let allItems: { el: HTMLElement, offset: number }[] = [];
             this.cachedRefs.forEach(ref => {
                 if (ref.el) allItems.push({ el: ref.el, offset: view.editor.posToOffset({ line: ref.line, ch: ref.col }) });
             });
@@ -808,7 +842,7 @@ class FootnoteListView extends ItemView {
             allItems.sort((a, b) => a.offset - b.offset);
 
             let primaryItem = allItems.slice().reverse().find(item => targetOffset >= item.offset - 15) || allItems[allItems.length - 1];
-            
+
             allItems.forEach(item => {
                 const distance = Math.abs(item.offset - targetOffset);
                 if (item === primaryItem || distance <= 30) item.el.addClass("is-active");
@@ -825,8 +859,6 @@ class FootnoteListView extends ItemView {
     showContextMenu(e: MouseEvent, ref: FootnoteRef | null = null) {
         const menu = new Menu();
         if (ref) {
-            // Note: openEditModal was in context menu logic but not defined in the original JS. 
-            // If you had it somewhere else, you might need to implement it. I'll add a placeholder.
             menu.addItem((item) => item.setTitle(ref.type === 'footnote' ? "编辑脚注 (未实现)" : "编辑注记").setIcon("pencil"));
             menu.addSeparator();
         }
@@ -859,7 +891,7 @@ class FootnoteListView extends ItemView {
         }
 
         let text = await this.app.vault.read(file);
-        let activeAnnos = (this.plugin.annoManager.data[file.path] || []).filter(a => (a.comments||[]).some(c => c.checked));
+        let activeAnnos = (this.plugin.annoManager.data[file.path] || []).filter(a => (a.comments || []).some(c => c.checked));
 
         if (activeAnnos.length === 0) {
             new Notice("当前没有勾选任何变体，无需导出！");
@@ -900,16 +932,27 @@ class FootnoteListView extends ItemView {
 class FootnoteCompassSettingTab extends PluginSettingTab {
     plugin: FootnoteCompassPlugin;
 
-    constructor(app: App, plugin: FootnoteCompassPlugin) { 
-        super(app, plugin); 
-        this.plugin = plugin; 
+    constructor(app: App, plugin: FootnoteCompassPlugin) {
+        super(app, plugin);
+        this.plugin = plugin;
+    }
+
+    // ✨ 需求 1：辅助函数，用于改变设置后强制侧边栏视图立刻刷新
+    forceRefreshSidebar() {
+        this.plugin.app.workspace.getLeavesOfType(VIEW_TYPE_FOOTNOTE).forEach(leaf => {
+            const view = leaf.view as FootnoteListView;
+            if (view) {
+                view._lastStateHash = "";
+                view.checkAndUpdate();
+            }
+        });
     }
 
     display() {
         const { containerEl } = this;
-        containerEl.empty(); 
+        containerEl.empty();
         containerEl.createEl("h2", { text: "脚注与标注大纲 设置" });
-        
+
         new Setting(containerEl).setName("标注数据存储文件")
             .setDesc("指定一个 .md 文件来安全存储你的标注和变体数据。支持直接输入新文件名，或搜索选择已有文件。")
             .addText(text => {
@@ -927,6 +970,7 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
         containerEl.createEl("h3", { text: "全局默认颜色设置", cls: "setting-section-header" });
         this.createColorSetting(containerEl, "默认原文本高亮颜色", "当创建新变体时，正文中被圈定的原词高亮颜色。", 'defaultHighlightColor');
         this.createColorSetting(containerEl, "默认替换后变体颜色", "在正文中替换成变体文字后的文字和边框颜色。", 'defaultPhantomColor');
+        this.createColorSetting(containerEl, "侧边栏分类标题颜色", "在侧边栏中基于H1-H6分类显示的标题文本颜色。", 'headingColor');
 
         const colorSection = containerEl.createDiv({ cls: "color-preset-section" });
         const headerDiv = colorSection.createDiv({ cls: "color-preset-header" });
@@ -939,27 +983,27 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
         const grid = colorSection.createDiv({ cls: "color-preset-grid" });
         this.plugin.settings.colorPresets.forEach((preset, index) => {
             const item = grid.createDiv({ cls: "color-preset-item" });
-            item.createEl("input", { type: "text", value: preset.name }).onchange = async (e) => { 
-                preset.name = (e.target as HTMLInputElement).value; await this.plugin.saveSettings(); 
+            item.createEl("input", { type: "text", value: preset.name }).onchange = async (e) => {
+                preset.name = (e.target as HTMLInputElement).value; await this.plugin.saveSettings();
             };
             const colorPicker = item.createEl("input", { type: "color", value: preset.hex, cls: "color-circle-input" });
             const hexInput = item.createEl("input", { type: "text", value: preset.hex, cls: "color-hex-input" });
-            
-            colorPicker.oninput = async (e) => { 
-                preset.hex = (e.target as HTMLInputElement).value; 
-                hexInput.value = preset.hex; 
-                await this.plugin.saveSettings(); 
+
+            colorPicker.oninput = async (e) => {
+                preset.hex = (e.target as HTMLInputElement).value;
+                hexInput.value = preset.hex;
+                await this.plugin.saveSettings();
             };
             hexInput.onchange = async (e) => {
                 let val = (e.target as HTMLInputElement).value;
                 val = val.startsWith("#") ? val : "#" + val;
                 preset.hex = val; colorPicker.value = val; await this.plugin.saveSettings();
             };
-            const delBtn = item.createDiv({ cls: "color-preset-del" }); 
+            const delBtn = item.createDiv({ cls: "color-preset-del" });
             setIcon(delBtn, "trash");
-            delBtn.onclick = async () => { 
-                this.plugin.settings.colorPresets.splice(index, 1); 
-                await this.plugin.saveSettings(); this.display(); 
+            delBtn.onclick = async () => {
+                this.plugin.settings.colorPresets.splice(index, 1);
+                await this.plugin.saveSettings(); this.display();
             };
         });
     }
@@ -970,9 +1014,11 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
             .addColorPicker(color => {
                 colorComp = color;
                 color.setValue(this.plugin.settings[settingKey] as string).onChange(async (val) => {
-                    (this.plugin.settings as any)[settingKey] = val; 
+                    (this.plugin.settings as any)[settingKey] = val;
                     if (textComp) textComp.setValue(val);
-                    await this.plugin.saveSettings(); updateEditorDecorations(this.plugin);
+                    await this.plugin.saveSettings(); 
+                    updateEditorDecorations(this.plugin);
+                    this.forceRefreshSidebar(); // ✨ 立即刷新侧边栏颜色
                 });
             })
             .addText(text => {
@@ -981,9 +1027,11 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
                     val = val.trim().startsWith("#") ? val.trim() : "#" + val.trim();
                     (this.plugin.settings as any)[settingKey] = val;
                     if (/^#([0-9A-Fa-f]{3}){1,2}$/.test(val)) {
-                        if (colorComp) colorComp.setValue(val); updateEditorDecorations(this.plugin);
+                        if (colorComp) colorComp.setValue(val); 
+                        updateEditorDecorations(this.plugin);
                     }
                     await this.plugin.saveSettings();
+                    this.forceRefreshSidebar(); // ✨ 立即刷新侧边栏颜色
                 });
                 text.inputEl.classList.add("color-hex-input"); text.inputEl.style.marginLeft = "8px";
             });
@@ -1003,7 +1051,9 @@ export default class FootnoteCompassPlugin extends Plugin {
         let loadedData = await this.loadData();
         this.settings = Object.assign({
             beautifyEnabled: false, isSortByKey: false, isAnnotationsCollapsed: true, annotationFilePath: "大纲变体标注数据库.md",
-            defaultHighlightColor: "#ff4444", defaultPhantomColor: "#009dff", colorPresets: defaultPresets
+            defaultHighlightColor: "#ff4444", defaultPhantomColor: "#009dff", colorPresets: defaultPresets,
+            headingFilters: {},
+            headingColor: "#2196f3" // 新增：默认标题颜色（蓝色）
         }, loadedData);
 
         this.annoManager = new AnnotationManager(this);
@@ -1023,7 +1073,7 @@ export default class FootnoteCompassPlugin extends Plugin {
         this.registerEvent(this.app.workspace.on('file-open', () => {
             updateEditorDecorations(this);
         }));
-        
+
         this.registerEvent(this.app.workspace.on('editor-change', debouncedOutlineUpdate));
 
         this.registerEvent(this.app.vault.on('rename', async (file, oldPath) => {
@@ -1048,16 +1098,16 @@ export default class FootnoteCompassPlugin extends Plugin {
                         const prefix = lineText.substring(Math.max(0, cursor.ch - 10), cursor.ch);
                         const suffix = lineText.substring(cursor.ch + selectedText.length, cursor.ch + selectedText.length + 10);
                         const path = view.file!.path;
-                        
+
                         const expectedOffset = editor.posToOffset(cursor);
-                        
+
                         if (!this.annoManager.data[path]) this.annoManager.data[path] = [];
                         this.annoManager.data[path].push({ id: generateUUID(), original: selectedText, prefix, suffix, expectedOffset, comments: [] });
-                        await this.annoManager.save(); 
-                        
+                        await this.annoManager.save();
+
                         const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_FOOTNOTE)[0];
-                        if(leaf && leaf.view instanceof FootnoteListView) leaf.view._lastStateHash = "";
-                        
+                        if (leaf && leaf.view instanceof FootnoteListView) leaf.view._lastStateHash = "";
+
                         updateEditorDecorations(this); this.activateView();
                     });
                 });
@@ -1065,27 +1115,27 @@ export default class FootnoteCompassPlugin extends Plugin {
         }));
 
         this.applyBeautifyStyle();
-        this.app.workspace.onLayoutReady(async () => { 
-            await this.annoManager.load(); 
-            debouncedOutlineUpdate(); 
-            updateEditorDecorations(this); 
+        this.app.workspace.onLayoutReady(async () => {
+            await this.annoManager.load();
+            debouncedOutlineUpdate();
+            updateEditorDecorations(this);
         });
     }
 
     async saveSettings() { await this.saveData(this.settings); }
-    
+
     applyBeautifyStyle() { document.body.classList.toggle('footnote-beautify-enabled', this.settings.beautifyEnabled); }
-    
-    async onunload() { 
-        document.body.classList.remove('footnote-beautify-enabled'); 
-        if (this.annoManager) { await this.annoManager.forceSave(); } 
+
+    async onunload() {
+        document.body.classList.remove('footnote-beautify-enabled');
+        if (this.annoManager) { await this.annoManager.forceSave(); }
     }
 
     async activateView() {
         let leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_FOOTNOTE)[0];
-        if (!leaf) { 
-            leaf = this.app.workspace.getRightLeaf(false)!; 
-            await leaf.setViewState({ type: VIEW_TYPE_FOOTNOTE, active: true }); 
+        if (!leaf) {
+            leaf = this.app.workspace.getRightLeaf(false)!;
+            await leaf.setViewState({ type: VIEW_TYPE_FOOTNOTE, active: true });
         }
         this.app.workspace.revealLeaf(leaf);
         if (leaf.view instanceof FootnoteListView) leaf.view.checkAndUpdate();

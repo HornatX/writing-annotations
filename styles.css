@@ -230,7 +230,6 @@
 
 .annotation-comment-row:hover {
     background-color: var(--background-modifier-hover);
-    border-color: var(--background-modifier-border-hover);
 }
 
 /* =========================================
@@ -245,7 +244,6 @@
     outline: none;
     width: 16px !important;
     height: 16px !important;
-    margin: 0;
     padding: 0;
     box-sizing: border-box;
     border-radius: 50%;
@@ -433,4 +431,119 @@
     margin-bottom: 20px;
     font-size: 14px;
     color: var(--text-normal);
+}
+
+/* =========================================
+   新增：标题层级下拉框样式
+   ========================================= */
+.heading-filter-select {
+    padding: 2px 4px;
+    font-size: 12px;
+    border-radius: 4px;
+    border: 1px solid var(--background-modifier-border);
+    background-color: var(--background-primary);
+    color: var(--text-normal);
+    cursor: pointer;
+    outline: none;
+}
+
+/* =========================================
+   新增：大纲标题分割线样式
+   ========================================= */
+.annotation-heading-divider {
+    margin: 15px 0 8px 0;
+    font-size: 15px;
+    font-weight: bold;
+    color: var(--text-accent);
+    padding-bottom: 4px;
+}
+
+/* =========================================
+   新增：卡片包裹组 (缝合相同状态的卡片)
+   ========================================= */
+.annotation-group-wrapper {
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 12px;
+    margin-bottom: 10px;
+    background-color: var(--background-secondary);
+    box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.05);
+    overflow: hidden; /* 防止内部元素超出圆角 */
+    display: flex;
+    flex-direction: column;
+}
+
+/* 视觉暗示：如果是已展开/已勾选项目的组，可以微微提亮一点点（可选） */
+.annotation-group-wrapper.group-checked {
+    border-color: var(--interactive-accent-muted, var(--background-modifier-border));
+}
+
+/* =========================================
+   重构：变体标注卡片 UI (去除旧边框，依托包裹组)
+   ========================================= */
+.annotation-card {
+    padding: 8px 10px;
+    /* 取消卡片自身的独立边框和圆角，交给 Wrapper 处理 */
+    border: none;
+    border-radius: 0;
+    margin-bottom: 0;
+    box-shadow: none;
+    background-color: transparent;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+/* 最后一个卡片不需要底部横线 */
+.annotation-group-wrapper .annotation-card:last-child {
+    border-bottom: none;
+}
+
+
+.annotation-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* 修改：去除了恶心的背景色，只保留加粗和字号 */
+.annotation-original {
+    font-weight: bold;
+    font-size: 16px;
+    color: var(--text-normal);
+    padding: 2px 0;
+}
+
+
+
+/* =========================================
+   自定义修正：隐藏内部分割线 & 解决文字位移
+   ========================================= */
+
+/* 1. 隐藏内部卡片的横分割线（只保留 .annotation-group-wrapper 的大外框） */
+.annotation-group-wrapper .annotation-card {
+    border-bottom: none !important;
+}
+
+/* 2. 移除选中状态时的文字位移（强制覆盖 JS 写入的加粗效果） */
+.annotation-comment-row .annotation-comment-text {
+    font-weight: normal !important; 
+}
+
+/* （可选黑科技）如果你希望选中的文字"看起来"是加粗的，但又绝对不发生位移，
+   可以保留下面这段代码。它利用文字描边来模拟加粗，不会改变文字原本占据的宽度大小 */
+.annotation-comment-row .annotation-comment-text[style*="font-weight: bold"] {
+    font-weight: normal !important;
+    -webkit-text-stroke: 0.35px currentColor; /* 模拟加粗且不改变宽度 */
+}
+
+/* =========================================
+   新增：卡片包裹组 (缝合相同状态的卡片)
+   ========================================= */
+.annotation-group-wrapper {
+    box-shadow: 1px 1px 0px rgba(0, 0, 0, 0.3) ;
+
+
 }
