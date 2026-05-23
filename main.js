@@ -692,7 +692,7 @@ var FootnoteListView = class extends import_obsidian.ItemView {
           const header = card.createDiv({ cls: "annotation-header" });
           header.dataset.displayMode = displayModeStr;
           const checkedComment = (anno.comments || []).find((c) => c.checked);
-          const variantText = checkedComment ? checkedComment.text : "\u672A\u9009\u62E9\u53D8\u4F53";
+          const variantText = checkedComment ? checkedComment.text : "\u65E0";
           header.createSpan({ text: anno.original, cls: "anno-title-text anno-text-original" });
           header.createSpan({ text: variantText, cls: "anno-title-text anno-text-variant" });
           header.createSpan({ text: `${anno.original}\uFF1A${variantText}`, cls: "anno-title-text anno-text-both" });
@@ -786,7 +786,7 @@ var FootnoteListView = class extends import_obsidian.ItemView {
       });
       if (allItems.length === 0) return;
       allItems.sort((a, b) => a.offset - b.offset);
-      let primaryItem = allItems.slice().reverse().find((item) => targetOffset >= item.offset - 15) || allItems[allItems.length - 1];
+      let primaryItem = allItems.slice().reverse().find((item) => targetOffset >= item.offset - 15) || allItems[0];
       allItems.forEach((item) => {
         const distance = Math.abs(item.offset - targetOffset);
         if (item === primaryItem || distance <= 30) item.el.addClass("is-active");
@@ -1000,11 +1000,15 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
     const debouncedOutlineUpdate = (0, import_obsidian.debounce)(() => {
       this.app.workspace.getLeavesOfType(VIEW_TYPE_FOOTNOTE).forEach((leaf) => leaf.view?.checkAndUpdate());
     }, 500, true);
+    const fastOutlineUpdate = (0, import_obsidian.debounce)(() => {
+      this.app.workspace.getLeavesOfType(VIEW_TYPE_FOOTNOTE).forEach((leaf) => leaf.view?.checkAndUpdate());
+    }, 50, true);
     this.registerEvent(this.app.workspace.on("active-leaf-change", () => {
-      debouncedOutlineUpdate();
+      fastOutlineUpdate();
       updateEditorDecorations(this);
     }));
     this.registerEvent(this.app.workspace.on("file-open", () => {
+      fastOutlineUpdate();
       updateEditorDecorations(this);
     }));
     this.registerEvent(this.app.workspace.on("editor-change", debouncedOutlineUpdate));

@@ -788,7 +788,7 @@ class FootnoteListView extends ItemView {
                     header.dataset.displayMode = displayModeStr;
 
                     const checkedComment = (anno.comments || []).find(c => c.checked);
-                    const variantText = checkedComment ? checkedComment.text : "未选择变体";
+                    const variantText = checkedComment ? checkedComment.text : "无";
 
                     header.createSpan({ text: anno.original, cls: "anno-title-text anno-text-original" });
                     header.createSpan({ text: variantText, cls: "anno-title-text anno-text-variant" });
@@ -887,7 +887,8 @@ class FootnoteListView extends ItemView {
             if (allItems.length === 0) return;
             allItems.sort((a, b) => a.offset - b.offset);
 
-            let primaryItem = allItems.slice().reverse().find(item => targetOffset >= item.offset - 15) || allItems[allItems.length - 1];
+            // 修复：当在顶部找不到上方的节点时，应该兜底选择文档的【第 0 个】（第一个）节点，而不是最后一个
+let primaryItem = allItems.slice().reverse().find(item => targetOffset >= item.offset - 15) || allItems[0];
 
             allItems.forEach(item => {
                 const distance = Math.abs(item.offset - targetOffset);
@@ -1109,18 +1110,29 @@ export default class FootnoteCompassPlugin extends Plugin {
         this.registerView(VIEW_TYPE_FOOTNOTE, (leaf) => new FootnoteListView(leaf, this));
         this.addRibbonIcon('message-circle-more', '打开脚注与标注面板', () => { this.activateView(); });
 
+        // 1. 保留给【打字】用的防抖（0.5秒延迟，防止打字卡顿）
         const debouncedOutlineUpdate = debounce(() => {
             this.app.workspace.getLeavesOfType(VIEW_TYPE_FOOTNOTE).forEach(leaf => (leaf.view as FootnoteListView)?.checkAndUpdate());
         }, 500, true);
 
-        this.registerEvent(this.app.workspace.on('active-leaf-change', () => {
-            debouncedOutlineUpdate(); updateEditorDecorations(this);
-        }));
+        // 2. 新增给【切换文件】用的快速刷新（50毫秒，几乎感觉不到延迟，但能保证 Obsidian 已经加载好新文件）
+        const fastOutlineUpdate = debounce(() => {
+            this.app.workspace.getLeavesOfType(VIEW_TYPE_FOOTNOTE).forEach(leaf => (leaf.view as FootnoteListView)?.checkAndUpdate());
+        }, 50, true);
 
-        this.registerEvent(this.app.workspace.on('file-open', () => {
+        // 3. 切换标签页时，使用极速刷新
+        this.registerEvent(this.app.workspace.on('active-leaf-change', () => {
+            fastOutlineUpdate(); 
             updateEditorDecorations(this);
         }));
 
+        // 4. 打开新文件时，使用极速刷新
+        this.registerEvent(this.app.workspace.on('file-open', () => {
+            fastOutlineUpdate(); 
+            updateEditorDecorations(this);
+        }));
+
+        // 5. 只有正文打字修改时，才使用 0.5秒的慢速刷新
         this.registerEvent(this.app.workspace.on('editor-change', debouncedOutlineUpdate));
 
         this.registerEvent(this.app.vault.on('rename', async (file, oldPath) => {
