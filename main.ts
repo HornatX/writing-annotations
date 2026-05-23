@@ -388,6 +388,7 @@ class FootnoteListView extends ItemView {
     isNavigating: boolean = false;
     _lastStateHash: string = "";
     _lastScrolledItem: any = null;
+    _forceExpandedCardId: string | null = null; // ✨ 新增：用于在关闭模式下记住手动展开的卡片
 
     debouncedSync: Function;
     debouncedScrollSync: Function;
@@ -429,7 +430,7 @@ class FootnoteListView extends ItemView {
 
         const triggerNavLock = () => {
             this.isNavigating = true;
-            setTimeout(() => { this.isNavigating = false; }, 800);
+            setTimeout(() => { this.isNavigating = false; }, 350);
             /*this.debouncedSync();*/   /*  不要删这个禁用光标判定*/
         };
 
@@ -438,9 +439,17 @@ class FootnoteListView extends ItemView {
         this.registerDomEvent(workspaceEl, 'keyup', triggerNavLock, { capture: true });
 
         this.registerDomEvent(workspaceEl, 'scroll', (e: Event) => {
-            if (this.isNavigating) return;
+            if (this.isNavigating) return; // 如果是点击侧边栏引发的自动跳转滚动，则保护状态不被重置
+
             const target = e.target as HTMLElement;
             if (target?.classList?.contains('cm-scroller')) {
+
+                // ✨ 核心需求：只要用户滑动了正文的滚轮，瞬间自动关闭刚才手动展开的卡片！(0延迟极速响应)
+                if (this._forceExpandedCardId !== null) {
+                    this._forceExpandedCardId = null;
+                    this.listRoot?.querySelectorAll('.annotation-card.force-expand').forEach(el => el.classList.remove('force-expand'));
+                }
+
                 // 1. 性能优化：优先检查最后一次操作的视图是不是当前滚动的视图（99%的情况）
                 if (this.lastActiveView) {
                     const cm = (this.lastActiveView.editor as any)?.cm as EditorView;
@@ -589,10 +598,10 @@ class FootnoteListView extends ItemView {
                 // --- 1. 层级过滤：从原生Select改为优雅的Obsidian官方Menu ---
                 const filterLvlStr = this.plugin.settings.headingFilters[filePath] || "0";
                 const headingMap: Record<string, string> = { "0": "无", "1": "H1", "2": "H2", "3": "H3", "4": "H4", "5": "H5", "6": "H6" };
-                
-                const headingBtn = rightControls.createEl("button", { 
-                    text: `${headingMap[filterLvlStr]} ▾`, 
-                    cls: "compass-ui-btn" 
+
+                const headingBtn = rightControls.createEl("button", {
+                    text: `${headingMap[filterLvlStr]} ▾`,
+                    cls: "compass-ui-btn"
                 });
                 headingBtn.onclick = (e) => {
                     const menu = new Menu();
@@ -613,11 +622,16 @@ class FootnoteListView extends ItemView {
 
                 // --- 2. 显示模式：从原生Select改为优雅的Obsidian官方Menu ---
                 const displayModeStr = this.plugin.settings.displayModes[filePath] || "original";
-                const modeMap: Record<string, string> = { "original": "标题", "variant": "变体", "both": "同时" };
-                
-                const displayModeBtn = rightControls.createEl("button", { 
-                    text: `${modeMap[displayModeStr]} ▾`, 
-                    cls: "compass-ui-btn" 
+
+                // ✨ 新增：给根节点打上当前模式的标记，供 CSS 精准控制
+                if (this.listRoot) this.listRoot.dataset.displayMode = displayModeStr;
+
+                // ✨ 新增：加入了 "closed": "关闭" 选项
+                const modeMap: Record<string, string> = { "original": "标题", "variant": "变体", "both": "同时", "closed": "关闭" };
+
+                const displayModeBtn = rightControls.createEl("button", {
+                    text: `${modeMap[displayModeStr]} ▾`,
+                    cls: "compass-ui-btn"
                 });
                 displayModeBtn.onclick = (e) => {
                     const menu = new Menu();
@@ -701,10 +715,28 @@ class FootnoteListView extends ItemView {
 
                     const card = currentGroupWrapper.createDiv({ cls: "annotation-card" });
                     anno.el = card;
+
+                    // ✨ 恢复状态：如果是关闭模式，且该卡片之前被手动点击展开过，则给它加上强制展开类
+                    if (displayModeStr === "closed" && this._forceExpandedCardId === anno.id) {
+                        card.classList.add("force-expand");
+                    }
+
                     const hColor = anno.highlightColor || this.plugin.settings.defaultHighlightColor;
                     const pColor = anno.phantomColor || this.plugin.settings.defaultPhantomColor;
 
                     card.onclick = () => {
+                        // ✨ 新增逻辑：在关闭模式下，点击卡片切换展开状态（手风琴效果：点一个关其他的）
+                        if (displayModeStr === "closed") {
+                            const wasExpanded = card.classList.contains('force-expand');
+                            this.listRoot?.querySelectorAll('.annotation-card.force-expand').forEach(el => el.classList.remove('force-expand'));
+                            if (!wasExpanded) {
+                                card.classList.add('force-expand');
+                                this._forceExpandedCardId = anno.id; // 记住被展开的卡片
+                            } else {
+                                this._forceExpandedCardId = null;    // 再次点击取消展开
+                            }
+                        }
+
                         if (this.lastActiveView?.editor?.offsetToPos && anno._tempOffset! < Number.MAX_SAFE_INTEGER) {
                             this.isNavigating = true;
                             setTimeout(() => { this.isNavigating = false; }, 800);
@@ -887,12 +919,25 @@ class FootnoteListView extends ItemView {
             if (allItems.length === 0) return;
             allItems.sort((a, b) => a.offset - b.offset);
 
-            // 修复：当在顶部找不到上方的节点时，应该兜底选择文档的【第 0 个】（第一个）节点，而不是最后一个
-let primaryItem = allItems.slice().reverse().find(item => targetOffset >= item.offset - 15) || allItems[0];
+            let primaryItem = allItems.slice().reverse().find(item => targetOffset >= item.offset - 15) || allItems[0];
+
+            // ✨ 获取当前的显示模式
+            const displayModeStr = this.plugin.settings.displayModes[view.file?.path || ""] || "original";
+            const isClosedMode = displayModeStr === "closed";
 
             allItems.forEach(item => {
                 const distance = Math.abs(item.offset - targetOffset);
-                if (item === primaryItem || distance <= 30) item.el.addClass("is-active");
+
+                let isActive = false;
+                if (isClosedMode) {
+                    // ✨ 关闭模式下：不允许展开相邻的判定，必须精确匹配 primaryItem
+                    isActive = (item === primaryItem);
+                } else {
+                    // 原来的逻辑：距离 <= 30 的相邻判定
+                    isActive = (item === primaryItem || distance <= 30);
+                }
+
+                if (isActive) item.el.addClass("is-active");
                 else item.el.removeClass("is-active");
             });
 
@@ -1122,13 +1167,13 @@ export default class FootnoteCompassPlugin extends Plugin {
 
         // 3. 切换标签页时，使用极速刷新
         this.registerEvent(this.app.workspace.on('active-leaf-change', () => {
-            fastOutlineUpdate(); 
+            fastOutlineUpdate();
             updateEditorDecorations(this);
         }));
 
         // 4. 打开新文件时，使用极速刷新
         this.registerEvent(this.app.workspace.on('file-open', () => {
-            fastOutlineUpdate(); 
+            fastOutlineUpdate();
             updateEditorDecorations(this);
         }));
 

@@ -582,3 +582,30 @@
     align-items: center;
     border-bottom: 1px solid var(--background-modifier-border);
 }
+/* =========================================
+   关闭模式 (Closed Mode) 专属逻辑
+   ========================================= */
+
+/* 1. 关闭模式下：拦截自动展开（修复选择器层级，去掉空格即可生效） */
+.footnote-list-root.annotations-collapsed-mode[data-display-mode="closed"] .annotation-card:not(.force-expand) .annotation-comments-list {
+    display: none !important;
+}
+
+/* 保证手动点击强制展开的卡片一定可见 */
+.footnote-list-root.annotations-collapsed-mode[data-display-mode="closed"] .annotation-card.force-expand .annotation-comments-list {
+    display: block !important;
+}
+
+/* 2. 关闭模式下：未展开的卡片底部内边距保持收缩 */
+.footnote-list-root.annotations-collapsed-mode[data-display-mode="closed"] .annotation-card:not(.force-expand) {
+    padding-bottom: 5px !important;
+}
+
+/* 3. 关闭模式下：强制文字像“同时”模式一样，只显示标题+变体，屏蔽单标题模式 */
+.annotation-header[data-display-mode="closed"] .anno-text-original,
+.annotation-header[data-display-mode="closed"] .anno-text-variant {
+    display: none !important;
+}
+.annotation-header[data-display-mode="closed"] .anno-text-both {
+    display: block !important;
+}

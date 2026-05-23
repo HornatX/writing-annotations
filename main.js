@@ -332,6 +332,7 @@ var FootnoteListView = class extends import_obsidian.ItemView {
     this.isNavigating = false;
     this._lastStateHash = "";
     this._lastScrolledItem = null;
+    this._forceExpandedCardId = null;
     this.plugin = plugin;
     this.debouncedSync = (0, import_obsidian.debounce)(() => {
       const activeLeaf = this.app.workspace.activeLeaf;
@@ -370,7 +371,7 @@ var FootnoteListView = class extends import_obsidian.ItemView {
       this.isNavigating = true;
       setTimeout(() => {
         this.isNavigating = false;
-      }, 800);
+      }, 350);
     };
     const workspaceEl = this.app.workspace.containerEl;
     this.registerDomEvent(workspaceEl, "click", triggerNavLock, { capture: true });
@@ -379,6 +380,10 @@ var FootnoteListView = class extends import_obsidian.ItemView {
       if (this.isNavigating) return;
       const target = e.target;
       if (target?.classList?.contains("cm-scroller")) {
+        if (this._forceExpandedCardId !== null) {
+          this._forceExpandedCardId = null;
+          this.listRoot?.querySelectorAll(".annotation-card.force-expand").forEach((el) => el.classList.remove("force-expand"));
+        }
         if (this.lastActiveView) {
           const cm = this.lastActiveView.editor?.cm;
           if (cm && cm.scrollDOM === target) {
@@ -523,7 +528,8 @@ var FootnoteListView = class extends import_obsidian.ItemView {
           menu.showAtMouseEvent(e);
         };
         const displayModeStr = this.plugin.settings.displayModes[filePath] || "original";
-        const modeMap = { "original": "\u6807\u9898", "variant": "\u53D8\u4F53", "both": "\u540C\u65F6" };
+        if (this.listRoot) this.listRoot.dataset.displayMode = displayModeStr;
+        const modeMap = { "original": "\u6807\u9898", "variant": "\u53D8\u4F53", "both": "\u540C\u65F6", "closed": "\u5173\u95ED" };
         const displayModeBtn = rightControls.createEl("button", {
           text: `${modeMap[displayModeStr]} \u25BE`,
           cls: "compass-ui-btn"
@@ -600,9 +606,22 @@ var FootnoteListView = class extends import_obsidian.ItemView {
           }
           const card = currentGroupWrapper.createDiv({ cls: "annotation-card" });
           anno.el = card;
+          if (displayModeStr === "closed" && this._forceExpandedCardId === anno.id) {
+            card.classList.add("force-expand");
+          }
           const hColor = anno.highlightColor || this.plugin.settings.defaultHighlightColor;
           const pColor = anno.phantomColor || this.plugin.settings.defaultPhantomColor;
           card.onclick = () => {
+            if (displayModeStr === "closed") {
+              const wasExpanded = card.classList.contains("force-expand");
+              this.listRoot?.querySelectorAll(".annotation-card.force-expand").forEach((el) => el.classList.remove("force-expand"));
+              if (!wasExpanded) {
+                card.classList.add("force-expand");
+                this._forceExpandedCardId = anno.id;
+              } else {
+                this._forceExpandedCardId = null;
+              }
+            }
             if (this.lastActiveView?.editor?.offsetToPos && anno._tempOffset < Number.MAX_SAFE_INTEGER) {
               this.isNavigating = true;
               setTimeout(() => {
@@ -787,9 +806,17 @@ var FootnoteListView = class extends import_obsidian.ItemView {
       if (allItems.length === 0) return;
       allItems.sort((a, b) => a.offset - b.offset);
       let primaryItem = allItems.slice().reverse().find((item) => targetOffset >= item.offset - 15) || allItems[0];
+      const displayModeStr = this.plugin.settings.displayModes[view.file?.path || ""] || "original";
+      const isClosedMode = displayModeStr === "closed";
       allItems.forEach((item) => {
         const distance = Math.abs(item.offset - targetOffset);
-        if (item === primaryItem || distance <= 30) item.el.addClass("is-active");
+        let isActive = false;
+        if (isClosedMode) {
+          isActive = item === primaryItem;
+        } else {
+          isActive = item === primaryItem || distance <= 30;
+        }
+        if (isActive) item.el.addClass("is-active");
         else item.el.removeClass("is-active");
       });
       if (primaryItem && this._lastScrolledItem !== primaryItem) {
