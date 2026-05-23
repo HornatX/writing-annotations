@@ -759,7 +759,7 @@ var FootnoteListView = class extends import_obsidian.ItemView {
             menu.showAtMouseEvent(e);
           };
           const header = card.createDiv({ cls: "annotation-header" });
-          header.dataset.displayMode = displayModeStr;
+          header.dataset.displayMode = displayModeStr === "closed" ? "original" : displayModeStr;
           const checkedComment = (anno.comments || []).find((c) => c.checked);
           const variantText = checkedComment ? checkedComment.text : "\u65E0";
           header.createSpan({ text: anno.original, cls: "anno-title-text anno-text-original" });
