@@ -276,7 +276,7 @@
 
 .annotation-comment-text {
     flex: 1;
-    font-size: 14px;
+    font-size: 16px;
     line-height: 1.4;
     color: var(--text-muted);
     user-select: none;
@@ -535,12 +535,13 @@
    ========================================= */
 .anno-title-text {
     display: none; 
-    font-size: 16px;
+    font-size: 18px;
     color: var(--text-normal); 
     padding: 2px 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+
 }
 
 .anno-text-original { display: block; }
