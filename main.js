@@ -522,15 +522,9 @@ var FootnoteListView = class extends import_obsidian.ItemView {
             this.renderRefList();
           }
         };
-        const toggleBtn = rightControls.createEl("button", { text: isCollapsed ? "\u5C55\u5F00" : "\u6298\u53E0" });
-        Object.assign(toggleBtn.style, {
-          padding: "2px 8px",
-          fontSize: "12px",
-          cursor: "pointer",
-          backgroundColor: "transparent",
-          border: "1px solid var(--background-modifier-border)",
-          borderRadius: "4px",
-          color: "var(--text-muted)"
+        const toggleBtn = rightControls.createEl("button", {
+          text: isCollapsed ? "\u5C55\u5F00" : "\u6298\u53E0",
+          cls: "annotation-toggle-btn"
         });
         toggleBtn.onclick = async () => {
           this.plugin.settings.isAnnotationsCollapsed = !isCollapsed;

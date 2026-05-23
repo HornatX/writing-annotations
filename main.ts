@@ -605,12 +605,10 @@ class FootnoteListView extends ItemView {
                     }
                 };
 
-                const toggleBtn = rightControls.createEl("button", { text: isCollapsed ? "展开" : "折叠" });
-
-                Object.assign(toggleBtn.style, {
-                    padding: "2px 8px", fontSize: "12px", cursor: "pointer",
-                    backgroundColor: "transparent", border: "1px solid var(--background-modifier-border)",
-                    borderRadius: "4px", color: "var(--text-muted)"
+                // 给按钮挂上 class 类名，不再使用 JS 直接写样式
+                const toggleBtn = rightControls.createEl("button", { 
+                    text: isCollapsed ? "展开" : "折叠",
+                    cls: "annotation-toggle-btn"
                 });
 
                 toggleBtn.onclick = async () => {
