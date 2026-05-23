@@ -98,14 +98,16 @@ var FileSuggest = class extends import_obsidian.AbstractInputSuggest {
   }
 };
 var PhantomWidget = class extends import_view.WidgetType {
-  constructor(text, color) {
+  // ✨ 新增：接收 annoId，用于记住自己是哪一个标注的变体
+  constructor(text, color, annoId) {
     super();
     this.text = text;
     this.color = color;
+    this.annoId = annoId;
     this.color = color || "#009dff";
   }
   eq(other) {
-    return other.text === this.text && other.color === this.color;
+    return other.text === this.text && other.color === this.color && other.annoId === this.annoId;
   }
   toDOM() {
     const span = document.createElement("span");
@@ -114,6 +116,10 @@ var PhantomWidget = class extends import_view.WidgetType {
     span.style.color = this.color;
     span.style.borderBottomColor = this.color;
     span.style.backgroundColor = hexToRgba(this.color, 0.15);
+    span.onclick = () => {
+      const event = new CustomEvent("footnote-compass-expand-card", { detail: { annoId: this.annoId } });
+      window.dispatchEvent(event);
+    };
     return span;
   }
 };
@@ -149,7 +155,8 @@ function createAnnotationDecorations(view, annotations, plugin) {
       decos.push({
         from: match.start,
         to: match.end,
-        deco: import_view.Decoration.replace({ widget: new PhantomWidget(checkedComment.text, pColor), inclusive: false })
+        // ✨ 修改：在参数最后把 anno.id 传进去
+        deco: import_view.Decoration.replace({ widget: new PhantomWidget(checkedComment.text, pColor, anno.id), inclusive: false })
       });
     } else {
       decos.push({
@@ -237,6 +244,7 @@ ${newBlock}
   }
 };
 var ColorPickerModal = class extends import_obsidian.Modal {
+  // ✨ 修改：onSelect 现在允许接收 null 代表恢复默认
   constructor(app, titleText, palette, onSelect) {
     super(app);
     this.titleText = titleText;
@@ -255,6 +263,12 @@ var ColorPickerModal = class extends import_obsidian.Modal {
         this.close();
       };
     });
+    const resetWrapper = this.contentEl.createDiv({ cls: "color-picker-reset-wrapper" });
+    const resetBtn = resetWrapper.createEl("button", { text: "\u21BA \u56DE\u5230\u9ED8\u8BA4\u989C\u8272" });
+    resetBtn.onclick = () => {
+      this.onSelect(null);
+      this.close();
+    };
   }
   onClose() {
     this.contentEl.empty();
@@ -403,6 +417,20 @@ var FootnoteListView = class extends import_obsidian.ItemView {
         }
       }
     }, { capture: true });
+    this.registerDomEvent(window, "footnote-compass-expand-card", (e) => {
+      const customEvent = e;
+      const targetId = customEvent.detail?.annoId;
+      if (!targetId || !this.listRoot) return;
+      const targetCard = this.listRoot.querySelector(`.annotation-card[data-anno-id="${targetId}"]`);
+      if (targetCard) {
+        this._forceExpandedCardId = targetId;
+        this.listRoot.querySelectorAll(".annotation-card.force-expand").forEach((el) => el.classList.remove("force-expand"));
+        targetCard.classList.add("force-expand");
+        this.listRoot.querySelectorAll(".annotation-card.is-active").forEach((el) => el.classList.remove("is-active"));
+        targetCard.classList.add("is-active");
+        targetCard.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    });
     setTimeout(() => this.checkAndUpdate(), 300);
   }
   findBestLeaf() {
@@ -605,6 +633,7 @@ var FootnoteListView = class extends import_obsidian.ItemView {
             });
           }
           const card = currentGroupWrapper.createDiv({ cls: "annotation-card" });
+          card.dataset.annoId = anno.id;
           anno.el = card;
           if (displayModeStr === "closed" && this._forceExpandedCardId === anno.id) {
             card.classList.add("force-expand");
@@ -655,7 +684,11 @@ var FootnoteListView = class extends import_obsidian.ItemView {
             menu.addItem((item) => {
               item.setTitle("\u4FEE\u6539\u5F53\u524D\u6807\u6CE8\u989C\u8272").setIcon("highlighter").onClick(() => {
                 new ColorPickerModal(this.app, "\u9009\u62E9\u6807\u6CE8\u9AD8\u4EAE\u989C\u8272", palette, async (c) => {
-                  anno.highlightColor = c;
+                  if (c) {
+                    anno.highlightColor = c;
+                  } else {
+                    delete anno.highlightColor;
+                  }
                   await this.plugin.annoManager.save();
                   updateEditorDecorations(this.plugin);
                   this._lastStateHash = "";
@@ -666,7 +699,11 @@ var FootnoteListView = class extends import_obsidian.ItemView {
             menu.addItem((item) => {
               item.setTitle("\u4FEE\u6539\u5F53\u524D\u53D8\u4F53\u989C\u8272").setIcon("paintbrush").onClick(() => {
                 new ColorPickerModal(this.app, "\u9009\u62E9\u66FF\u6362\u540E\u989C\u8272", palette, async (c) => {
-                  anno.phantomColor = c;
+                  if (c) {
+                    anno.phantomColor = c;
+                  } else {
+                    delete anno.phantomColor;
+                  }
                   await this.plugin.annoManager.save();
                   updateEditorDecorations(this.plugin);
                   this._lastStateHash = "";

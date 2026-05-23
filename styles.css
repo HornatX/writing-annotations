@@ -626,3 +626,27 @@
     background-color: var(--background-modifier-active-hover) !important;
     transition: all 0.1s ease;
 }
+
+/* =========================================
+   颜色选择器重置按钮
+   ========================================= */
+.color-picker-reset-wrapper {
+    display: flex;
+    justify-content: center;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid var(--background-modifier-border);
+}
+
+.color-picker-reset-wrapper button {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-muted);
+    border: none;
+    box-shadow: none;
+    transition: all 0.2s ease;
+}
+
+.color-picker-reset-wrapper button:hover {
+    background-color: var(--background-modifier-active-hover);
+    color: var(--text-normal);
+}

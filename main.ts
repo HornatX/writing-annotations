@@ -151,12 +151,13 @@ class FileSuggest extends AbstractInputSuggest<TFile> {
 
 // --- CM6：变体幽灵文本 ---
 class PhantomWidget extends WidgetType {
-    constructor(public text: string, public color: string) {
+    // ✨ 新增：接收 annoId，用于记住自己是哪一个标注的变体
+    constructor(public text: string, public color: string, public annoId: string) {
         super();
         this.color = color || "#009dff";
     }
     eq(other: PhantomWidget) {
-        return other.text === this.text && other.color === this.color;
+        return other.text === this.text && other.color === this.color && other.annoId === this.annoId;
     }
     toDOM() {
         const span = document.createElement("span");
@@ -165,6 +166,13 @@ class PhantomWidget extends WidgetType {
         span.style.color = this.color;
         span.style.borderBottomColor = this.color;
         span.style.backgroundColor = hexToRgba(this.color, 0.15);
+        
+        // ✨ 新增核心逻辑：当你在正文点击这个变体文字时，发射一个带 ID 的全局事件！
+        span.onclick = () => {
+            const event = new CustomEvent('footnote-compass-expand-card', { detail: { annoId: this.annoId } });
+            window.dispatchEvent(event);
+        };
+        
         return span;
     }
 }
@@ -202,10 +210,11 @@ function createAnnotationDecorations(view: EditorView, annotations: Annotation[]
         const pColor = anno.phantomColor || plugin.settings.defaultPhantomColor;
         const checkedComment = (anno.comments || []).find(c => c.checked);
 
-        if (checkedComment) {
+if (checkedComment) {
             decos.push({
                 from: match.start, to: match.end,
-                deco: Decoration.replace({ widget: new PhantomWidget(checkedComment.text, pColor), inclusive: false })
+                // ✨ 修改：在参数最后把 anno.id 传进去
+                deco: Decoration.replace({ widget: new PhantomWidget(checkedComment.text, pColor, anno.id), inclusive: false })
             });
         } else {
             decos.push({
@@ -303,7 +312,8 @@ class AnnotationManager {
 
 // --- 弹窗组件集 ---
 class ColorPickerModal extends Modal {
-    constructor(app: App, public titleText: string, public palette: ColorPreset[], public onSelect: (hex: string) => void) {
+    // ✨ 修改：onSelect 现在允许接收 null 代表恢复默认
+    constructor(app: App, public titleText: string, public palette: ColorPreset[], public onSelect: (hex: string | null) => void) {
         super(app);
     }
     onOpen() {
@@ -315,6 +325,14 @@ class ColorPickerModal extends Modal {
             btn.title = color.name;
             btn.onclick = () => { this.onSelect(color.hex); this.close(); };
         });
+
+        // ✨ 新增：回到默认按钮
+        const resetWrapper = this.contentEl.createDiv({ cls: "color-picker-reset-wrapper" });
+        const resetBtn = resetWrapper.createEl("button", { text: "↺ 回到默认颜色" });
+        resetBtn.onclick = () => {
+            this.onSelect(null); // 传 null 通知外部清空颜色
+            this.close();
+        };
     }
     onClose() { this.contentEl.empty(); }
 }
@@ -389,6 +407,7 @@ class FootnoteListView extends ItemView {
     _lastStateHash: string = "";
     _lastScrolledItem: any = null;
     _forceExpandedCardId: string | null = null; // ✨ 新增：用于在关闭模式下记住手动展开的卡片
+    
 
     debouncedSync: Function;
     debouncedScrollSync: Function;
@@ -472,6 +491,29 @@ class FootnoteListView extends ItemView {
                 }
             }
         }, { capture: true });
+
+        // ✨ 新增全局监听：接收在正文里点击“变体文本”的求助信号
+        this.registerDomEvent(window, 'footnote-compass-expand-card', (e: Event) => {
+            const customEvent = e as CustomEvent;
+            const targetId = customEvent.detail?.annoId;
+            if (!targetId || !this.listRoot) return;
+
+            // 根据 ID 揪出对应的卡片
+            const targetCard = this.listRoot.querySelector(`.annotation-card[data-anno-id="${targetId}"]`) as HTMLElement;
+            if (targetCard) {
+                // 1. 强行设为“手动展开”状态，并收起其他的卡片（手风琴效果）
+                this._forceExpandedCardId = targetId;
+                this.listRoot.querySelectorAll('.annotation-card.force-expand').forEach(el => el.classList.remove('force-expand'));
+                targetCard.classList.add('force-expand');
+
+                // 2. 夺走激活高亮（变成白底）
+                this.listRoot.querySelectorAll('.annotation-card.is-active').forEach(el => el.classList.remove('is-active'));
+                targetCard.classList.add('is-active');
+
+                // 3. 丝滑滚动，把这张卡片送到侧边栏正中间！
+                targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        });
 
         // 强行给足加载时间，避免刚启动时找不准 leaf
         setTimeout(() => this.checkAndUpdate(), 300);
@@ -714,6 +756,7 @@ class FootnoteListView extends ItemView {
                     }
 
                     const card = currentGroupWrapper.createDiv({ cls: "annotation-card" });
+                    card.dataset.annoId = anno.id; // ✨ 新增：给卡片打上用于精准查找的专属 ID 标签
                     anno.el = card;
 
                     // ✨ 恢复状态：如果是关闭模式，且该卡片之前被手动点击展开过，则给它加上强制展开类
@@ -774,7 +817,13 @@ class FootnoteListView extends ItemView {
                         menu.addItem((item) => {
                             item.setTitle("修改当前标注颜色").setIcon("highlighter").onClick(() => {
                                 new ColorPickerModal(this.app, "选择标注高亮颜色", palette, async (c) => {
-                                    anno.highlightColor = c; await this.plugin.annoManager.save();
+                                    // ✨ 修改：如果有颜色就赋值，如果是 null 就删掉该属性(恢复默认)
+                                    if (c) {
+                                        anno.highlightColor = c; 
+                                    } else {
+                                        delete anno.highlightColor;
+                                    }
+                                    await this.plugin.annoManager.save();
                                     updateEditorDecorations(this.plugin); this._lastStateHash = ""; this.checkAndUpdate();
                                 }).open();
                             });
@@ -783,7 +832,13 @@ class FootnoteListView extends ItemView {
                         menu.addItem((item) => {
                             item.setTitle("修改当前变体颜色").setIcon("paintbrush").onClick(() => {
                                 new ColorPickerModal(this.app, "选择替换后颜色", palette, async (c) => {
-                                    anno.phantomColor = c; await this.plugin.annoManager.save();
+                                    // ✨ 修改：同理，null 时删掉属性
+                                    if (c) {
+                                        anno.phantomColor = c; 
+                                    } else {
+                                        delete anno.phantomColor;
+                                    }
+                                    await this.plugin.annoManager.save();
                                     updateEditorDecorations(this.plugin); this._lastStateHash = ""; this.checkAndUpdate();
                                 }).open();
                             });
