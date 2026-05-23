@@ -429,7 +429,7 @@ class FootnoteListView extends ItemView {
         const triggerNavLock = () => {
             this.isNavigating = true;
             setTimeout(() => { this.isNavigating = false; }, 800);
-            this.debouncedSync();
+            /*this.debouncedSync();*/   /*  不要删这个禁用光标判定*/ 
         };
 
         const workspaceEl = this.app.workspace.containerEl;
@@ -440,11 +440,24 @@ class FootnoteListView extends ItemView {
             if (this.isNavigating) return;
             const target = e.target as HTMLElement;
             if (target?.classList?.contains('cm-scroller')) {
-                const activeLeaf = this.app.workspace.activeLeaf;
-                if (activeLeaf?.view instanceof MarkdownView) {
-                    const cm = (activeLeaf.view.editor as any).cm as EditorView;
-                    if (cm?.scrollDOM === target) {
-                        this.debouncedScrollSync(activeLeaf.view);
+                // 1. 性能优化：优先检查最后一次操作的视图是不是当前滚动的视图（99%的情况）
+                if (this.lastActiveView) {
+                    const cm = (this.lastActiveView.editor as any)?.cm as EditorView;
+                    if (cm && cm.scrollDOM === target) {
+                        this.debouncedScrollSync(this.lastActiveView);
+                        return;
+                    }
+                }
+                
+                // 2. 失去焦点兜底：如果焦点在侧边栏，遍历寻找真正发生滚动的那个正文窗口
+                const leaves = this.app.workspace.getLeavesOfType('markdown');
+                for (let leaf of leaves) {
+                    const view = leaf.view as MarkdownView;
+                    const cm = (view.editor as any)?.cm as EditorView;
+                    if (cm && cm.scrollDOM === target) {
+                        this.lastActiveView = view; // 更新缓存
+                        this.debouncedScrollSync(view);
+                        break;
                     }
                 }
             }

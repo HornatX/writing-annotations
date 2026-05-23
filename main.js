@@ -371,7 +371,6 @@ var FootnoteListView = class extends import_obsidian.ItemView {
       setTimeout(() => {
         this.isNavigating = false;
       }, 800);
-      this.debouncedSync();
     };
     const workspaceEl = this.app.workspace.containerEl;
     this.registerDomEvent(workspaceEl, "click", triggerNavLock, { capture: true });
@@ -380,11 +379,21 @@ var FootnoteListView = class extends import_obsidian.ItemView {
       if (this.isNavigating) return;
       const target = e.target;
       if (target?.classList?.contains("cm-scroller")) {
-        const activeLeaf = this.app.workspace.activeLeaf;
-        if (activeLeaf?.view instanceof import_obsidian.MarkdownView) {
-          const cm = activeLeaf.view.editor.cm;
-          if (cm?.scrollDOM === target) {
-            this.debouncedScrollSync(activeLeaf.view);
+        if (this.lastActiveView) {
+          const cm = this.lastActiveView.editor?.cm;
+          if (cm && cm.scrollDOM === target) {
+            this.debouncedScrollSync(this.lastActiveView);
+            return;
+          }
+        }
+        const leaves = this.app.workspace.getLeavesOfType("markdown");
+        for (let leaf of leaves) {
+          const view = leaf.view;
+          const cm = view.editor?.cm;
+          if (cm && cm.scrollDOM === target) {
+            this.lastActiveView = view;
+            this.debouncedScrollSync(view);
+            break;
           }
         }
       }
