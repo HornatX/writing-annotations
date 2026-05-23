@@ -626,13 +626,22 @@
     padding-bottom: 5px !important;
 }
 
-/* 3. 关闭模式下：强制文字像“同时”模式一样，只显示标题+变体，屏蔽单标题模式 */
-.annotation-header[data-display-mode="closed"] .anno-text-original,
-.annotation-header[data-display-mode="closed"] .anno-text-variant {
+/* 3. 关闭模式下的专属标题显示逻辑 */
+/* ① 未展开时（不管滚轮是否滚到它，只要没被点击展开）：始终显示“原标题：变体” */
+.annotation-card:not(.force-expand) .annotation-header[data-display-mode="closed"] .anno-text-original,
+.annotation-card:not(.force-expand) .annotation-header[data-display-mode="closed"] .anno-text-variant {
     display: none !important;
 }
+.annotation-card:not(.force-expand) .annotation-header[data-display-mode="closed"] .anno-text-both {
+    display: block !important;
+}
 
-.annotation-header[data-display-mode="closed"] .anno-text-both {
+/* ② 展开时（被点击并加上了 force-expand）：隐藏后面的变体，只显示原标题 */
+.annotation-card.force-expand .annotation-header[data-display-mode="closed"] .anno-text-both,
+.annotation-card.force-expand .annotation-header[data-display-mode="closed"] .anno-text-variant {
+    display: none !important;
+}
+.annotation-card.force-expand .annotation-header[data-display-mode="closed"] .anno-text-original {
     display: block !important;
 }
 

@@ -887,10 +887,9 @@ class FootnoteListView extends ItemView {
                     };
 
                     const header = card.createDiv({ cls: "annotation-header" });
-                    
-                    // ✨ 修复：在关闭模式下，头部区域始终只显示原文本，因此逻辑等同于 original(标题) 模式
-                    // 这样展开后也依然会隐藏标题里面的变体文字
-                    header.dataset.displayMode = displayModeStr === "closed" ? "original" : displayModeStr;
+
+                    // ✨ 修复：在关闭模式下，将状态原封不动地传递给 CSS，由 CSS 根据 force-expand（是否展开）来精确控制文字显隐
+                    header.dataset.displayMode = displayModeStr;
 
                     const checkedComment = (anno.comments || []).find(c => c.checked);
                     const variantText = checkedComment ? checkedComment.text : "无";
