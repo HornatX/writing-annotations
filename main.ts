@@ -749,8 +749,17 @@ class FootnoteListView extends ItemView {
 
                     card.oncontextmenu = (e) => {
                         e.stopPropagation();
-                        // (这里保持你原来的菜单逻辑不变)
+                        
+                        // ✨ 1. 添加选中状态类
+                        card.classList.add("is-context-active");
+
                         const menu = new Menu();
+                        
+                        // ✨ 2. 监听菜单消失，移除选中状态
+                        menu.onHide(() => {
+                            card.classList.remove("is-context-active");
+                        });
+
                         menu.addItem((item) => {
                             item.setTitle("添加新变体").setIcon("list-plus").onClick(() => {
                                 new CommentModal(this.app, "添加新变体", "", async (text) => {

@@ -635,7 +635,11 @@ var FootnoteListView = class extends import_obsidian.ItemView {
           };
           card.oncontextmenu = (e) => {
             e.stopPropagation();
+            card.classList.add("is-context-active");
             const menu = new import_obsidian.Menu();
+            menu.onHide(() => {
+              card.classList.remove("is-context-active");
+            });
             menu.addItem((item) => {
               item.setTitle("\u6DFB\u52A0\u65B0\u53D8\u4F53").setIcon("list-plus").onClick(() => {
                 new CommentModal(this.app, "\u6DFB\u52A0\u65B0\u53D8\u4F53", "", async (text) => {

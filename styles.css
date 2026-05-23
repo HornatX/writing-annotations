@@ -609,3 +609,20 @@
 .annotation-header[data-display-mode="closed"] .anno-text-both {
     display: block !important;
 }
+
+/* =========================================
+   右键菜单呼出时的锁定高亮状态
+   ========================================= */
+
+/* 卡片整体右键时：深色背景 + 主题色发光边框 */
+.annotation-card.is-context-active {
+    background-color: var(--background-modifier-active-hover) !important;
+    border-color: var(--interactive-accent) !important;
+    transition: all 0.1s ease;
+}
+
+/* 子项变体右键时：深色背景包裹 */
+.annotation-comment-row.is-context-active {
+    background-color: var(--background-modifier-active-hover) !important;
+    transition: all 0.1s ease;
+}
