@@ -228,8 +228,8 @@
    ========================================= */
 .annotation-checkbox,
 .annotation-checkbox:checked {
-    appearance: none;
     -webkit-appearance: none;
+    appearance: none;
     background: transparent !important;
     box-shadow: none;
     outline: none;
@@ -253,9 +253,7 @@
     border-color: var(--dynamic-color, var(--interactive-accent));
 }
 
-.annotation-comment-row:hover .annotation-checkbox:not(:checked) {
-    border-color: var(--text-muted);
-}
+
 
 .annotation-checkbox::before {
     content: "";
@@ -429,8 +427,11 @@
 
 
 .annotation-toggle-btn:hover {
-    color: var(--text-normal) !important; /* 鼠标悬停时变亮 */
-}/* =========================================
+    color: var(--text-normal) !important;
+    /* 鼠标悬停时变亮 */
+}
+
+/* =========================================
    大纲标题分割线与卡片组
    ========================================= */
 .annotation-heading-divider {
@@ -445,8 +446,9 @@
     border-radius: 12px;
     margin-bottom: 10px;
     background-color: var(--background-secondary);
-    box-shadow: 1px 1px 0px rgba(0, 0, 0, 0.3); /* 合并了重复的 box-shadow */
-    overflow: hidden; 
+    box-shadow: 1px 1px 0px rgba(0, 0, 0, 0.3);
+    /* 合并了重复的 box-shadow */
+    overflow: hidden;
     display: flex;
     flex-direction: column;
 }
@@ -456,7 +458,8 @@
 }
 
 .annotation-group-wrapper .annotation-card {
-    border-bottom: none !important; /* 隐藏内部卡片的横分割线 */
+    border-bottom: none !important;
+    /* 隐藏内部卡片的横分割线 */
 }
 
 /* =========================================
@@ -485,11 +488,13 @@
    自定义修正：解决文字位移
    ========================================= */
 .annotation-comment-row .annotation-comment-text {
-    font-weight: normal !important; 
+    font-weight: normal !important;
 }
+
 .annotation-comment-row .annotation-comment-text[style*="font-weight: bold"] {
     font-weight: normal !important;
-    -webkit-text-stroke: 0.35px currentColor; /* 模拟加粗且不改变宽度 */
+    -webkit-text-stroke: 0.35px currentColor;
+    /* 模拟加粗且不改变宽度 */
 }
 
 /* =========================================
@@ -498,13 +503,14 @@
 .footnote-list-root {
     flex: 1;
     overflow-y: auto;
-    padding: 0 10px 10px 10px; 
+    padding: 0 10px 10px 10px;
 }
 
 .footnote-compass-container {
     padding: 0px;
-    margin-top: 10px; 
+    margin-top: 10px;
 }
+
 .footnote-compass-container:empty {
     display: none;
 }
@@ -534,9 +540,9 @@
    折叠模式动态标题切换机制
    ========================================= */
 .anno-title-text {
-    display: none; 
+    display: none;
     font-size: 18px;
-    color: var(--text-normal); 
+    color: var(--text-normal);
     padding: 2px 0;
     white-space: nowrap;
     overflow: hidden;
@@ -544,11 +550,25 @@
 
 }
 
-.anno-text-original { display: block; }
-.annotations-collapsed-mode .annotation-card:not(.is-active) .annotation-header[data-display-mode="variant"] .anno-text-original { display: none; }
-.annotations-collapsed-mode .annotation-card:not(.is-active) .annotation-header[data-display-mode="variant"] .anno-text-variant { display: block; }
-.annotations-collapsed-mode .annotation-card:not(.is-active) .annotation-header[data-display-mode="both"] .anno-text-original { display: none; }
-.annotations-collapsed-mode .annotation-card:not(.is-active) .annotation-header[data-display-mode="both"] .anno-text-both { display: block; }
+.anno-text-original {
+    display: block;
+}
+
+.annotations-collapsed-mode .annotation-card:not(.is-active) .annotation-header[data-display-mode="variant"] .anno-text-original {
+    display: none;
+}
+
+.annotations-collapsed-mode .annotation-card:not(.is-active) .annotation-header[data-display-mode="variant"] .anno-text-variant {
+    display: block;
+}
+
+.annotations-collapsed-mode .annotation-card:not(.is-active) .annotation-header[data-display-mode="both"] .anno-text-original {
+    display: none;
+}
+
+.annotations-collapsed-mode .annotation-card:not(.is-active) .annotation-header[data-display-mode="both"] .anno-text-both {
+    display: block;
+}
 
 
 
@@ -557,12 +577,14 @@
     flex: 1;
     overflow-y: auto;
     /* padding: 10px;  <--- 替换掉这行 */
-    padding: 0 10px 10px 10px; /* 顶部设为 0，左右下保持 10px */
+    padding: 0 10px 10px 10px;
+    /* 顶部设为 0，左右下保持 10px */
 }
 
 .footnote-compass-container {
     padding: 0px;
-    margin-top: 10px; /* 当有脚注时，保持顶部 10px 的美观间距 */
+    margin-top: 10px;
+    /* 当有脚注时，保持顶部 10px 的美观间距 */
 }
 
 /* 如果没有脚注，隐藏该容器，避免产生多余空隙 */
@@ -572,16 +594,19 @@
 
 .annotation-section-header {
     position: sticky;
-    top: 0; /* ★ 从 -10px 改为 0，实现瞬间无缝吸顶 */
+    top: 0;
+    /* ★ 从 -10px 改为 0，实现瞬间无缝吸顶 */
     z-index: 100;
     background-color: var(--background-secondary);
-    margin: 0px -10px 10px -10px; /* 保持不变 */
+    margin: 0px -10px 10px -10px;
+    /* 保持不变 */
     padding: 10px 10px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     border-bottom: 1px solid var(--background-modifier-border);
 }
+
 /* =========================================
    关闭模式 (Closed Mode) 专属逻辑
    ========================================= */
@@ -606,6 +631,7 @@
 .annotation-header[data-display-mode="closed"] .anno-text-variant {
     display: none !important;
 }
+
 .annotation-header[data-display-mode="closed"] .anno-text-both {
     display: block !important;
 }

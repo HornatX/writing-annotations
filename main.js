@@ -116,7 +116,7 @@ var PhantomWidget = class extends import_view.WidgetType {
     span.style.color = this.color;
     span.style.borderBottomColor = this.color;
     span.style.backgroundColor = hexToRgba(this.color, 0.15);
-    span.onclick = () => {
+    span.onmousedown = () => {
       const event = new CustomEvent("footnote-compass-expand-card", { detail: { annoId: this.annoId } });
       window.dispatchEvent(event);
     };
@@ -347,6 +347,8 @@ var FootnoteListView = class extends import_obsidian.ItemView {
     this._lastStateHash = "";
     this._lastScrolledItem = null;
     this._forceExpandedCardId = null;
+    // ✨ 新增：用于在关闭模式下记住手动展开的卡片
+    this._lockedActiveId = null;
     this.plugin = plugin;
     this.debouncedSync = (0, import_obsidian.debounce)(() => {
       const activeLeaf = this.app.workspace.activeLeaf;
@@ -394,6 +396,7 @@ var FootnoteListView = class extends import_obsidian.ItemView {
       if (this.isNavigating) return;
       const target = e.target;
       if (target?.classList?.contains("cm-scroller")) {
+        this._lockedActiveId = null;
         if (this._forceExpandedCardId !== null) {
           this._forceExpandedCardId = null;
           this.listRoot?.querySelectorAll(".annotation-card.force-expand").forEach((el) => el.classList.remove("force-expand"));
@@ -421,6 +424,11 @@ var FootnoteListView = class extends import_obsidian.ItemView {
       const customEvent = e;
       const targetId = customEvent.detail?.annoId;
       if (!targetId || !this.listRoot) return;
+      this._lockedActiveId = targetId;
+      this.isNavigating = true;
+      setTimeout(() => {
+        this.isNavigating = false;
+      }, 800);
       const targetCard = this.listRoot.querySelector(`.annotation-card[data-anno-id="${targetId}"]`);
       if (targetCard) {
         this._forceExpandedCardId = targetId;
@@ -641,6 +649,7 @@ var FootnoteListView = class extends import_obsidian.ItemView {
           const hColor = anno.highlightColor || this.plugin.settings.defaultHighlightColor;
           const pColor = anno.phantomColor || this.plugin.settings.defaultPhantomColor;
           card.onclick = () => {
+            this._lockedActiveId = anno.id;
             if (displayModeStr === "closed") {
               const wasExpanded = card.classList.contains("force-expand");
               this.listRoot?.querySelectorAll(".annotation-card.force-expand").forEach((el) => el.classList.remove("force-expand"));
@@ -762,6 +771,7 @@ var FootnoteListView = class extends import_obsidian.ItemView {
             row.dataset.commentId = comment.id;
             row.onclick = async (e) => {
               e.stopPropagation();
+              this._lockedActiveId = anno.id;
               if (this.lastActiveView?.editor?.offsetToPos && anno._tempOffset < Number.MAX_SAFE_INTEGER) {
                 this.isNavigating = true;
                 setTimeout(() => {
@@ -836,26 +846,44 @@ var FootnoteListView = class extends import_obsidian.ItemView {
     try {
       let allItems = [];
       this.cachedRefs.forEach((ref) => {
-        if (ref.el) allItems.push({ el: ref.el, offset: view.editor.posToOffset({ line: ref.line, ch: ref.col }) });
+        if (ref.el) allItems.push({ el: ref.el, offset: view.editor.posToOffset({ line: ref.line, ch: ref.col }), id: ref.key });
       });
       const annos = this.plugin.annoManager.data[view.file?.path || ""] || [];
       annos.forEach((anno) => {
         if (anno.el && anno._tempOffset !== void 0 && anno._tempOffset < Number.MAX_SAFE_INTEGER) {
-          allItems.push({ el: anno.el, offset: anno._tempOffset });
+          allItems.push({ el: anno.el, offset: anno._tempOffset, id: anno.id });
         }
       });
       if (allItems.length === 0) return;
-      allItems.sort((a, b) => a.offset - b.offset);
-      let primaryItem = allItems.slice().reverse().find((item) => targetOffset >= item.offset - 15) || allItems[0];
+      let primaryItem = allItems[0];
+      let minDistance = Infinity;
+      allItems.forEach((item) => {
+        let dist = Math.abs(item.offset - targetOffset);
+        if (dist < minDistance) {
+          minDistance = dist;
+          primaryItem = item;
+        }
+      });
+      if (this._lockedActiveId) {
+        const lockedItem = allItems.find((i) => i.id === this._lockedActiveId);
+        if (lockedItem && Math.abs(lockedItem.offset - targetOffset) < 150) {
+          primaryItem = lockedItem;
+        } else {
+          this._lockedActiveId = null;
+        }
+      }
       const displayModeStr = this.plugin.settings.displayModes[view.file?.path || ""] || "original";
       const isClosedMode = displayModeStr === "closed";
+      if (isClosedMode && !this.isNavigating && this._forceExpandedCardId !== null && this._lockedActiveId === null) {
+        this._forceExpandedCardId = null;
+        this.listRoot.querySelectorAll(".annotation-card.force-expand").forEach((el) => el.classList.remove("force-expand"));
+      }
       allItems.forEach((item) => {
-        const distance = Math.abs(item.offset - targetOffset);
         let isActive = false;
         if (isClosedMode) {
           isActive = item === primaryItem;
         } else {
-          isActive = item === primaryItem || distance <= 30;
+          isActive = item === primaryItem;
         }
         if (isActive) item.el.addClass("is-active");
         else item.el.removeClass("is-active");

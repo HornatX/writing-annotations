@@ -166,13 +166,14 @@ class PhantomWidget extends WidgetType {
         span.style.color = this.color;
         span.style.borderBottomColor = this.color;
         span.style.backgroundColor = hexToRgba(this.color, 0.15);
-        
-        // ✨ 新增核心逻辑：当你在正文点击这个变体文字时，发射一个带 ID 的全局事件！
-        span.onclick = () => {
+
+        // ✨ 修改核心逻辑：将 onclick 改为 onmousedown！
+        // 在光标发生移动、排版发生变化之前，抢先一步向系统宣誓主权！
+        span.onmousedown = () => {
             const event = new CustomEvent('footnote-compass-expand-card', { detail: { annoId: this.annoId } });
             window.dispatchEvent(event);
         };
-        
+
         return span;
     }
 }
@@ -210,7 +211,7 @@ function createAnnotationDecorations(view: EditorView, annotations: Annotation[]
         const pColor = anno.phantomColor || plugin.settings.defaultPhantomColor;
         const checkedComment = (anno.comments || []).find(c => c.checked);
 
-if (checkedComment) {
+        if (checkedComment) {
             decos.push({
                 from: match.start, to: match.end,
                 // ✨ 修改：在参数最后把 anno.id 传进去
@@ -407,7 +408,8 @@ class FootnoteListView extends ItemView {
     _lastStateHash: string = "";
     _lastScrolledItem: any = null;
     _forceExpandedCardId: string | null = null; // ✨ 新增：用于在关闭模式下记住手动展开的卡片
-    
+    _lockedActiveId: string | null = null;      // ✨ 修复：补充声明锁定状态变量
+
 
     debouncedSync: Function;
     debouncedScrollSync: Function;
@@ -458,12 +460,14 @@ class FootnoteListView extends ItemView {
         this.registerDomEvent(workspaceEl, 'keyup', triggerNavLock, { capture: true });
 
         this.registerDomEvent(workspaceEl, 'scroll', (e: Event) => {
-            if (this.isNavigating) return; // 如果是点击侧边栏引发的自动跳转滚动，则保护状态不被重置
+            if (this.isNavigating) return;
 
             const target = e.target as HTMLElement;
             if (target?.classList?.contains('cm-scroller')) {
 
-                // ✨ 核心需求：只要用户滑动了正文的滚轮，瞬间自动关闭刚才手动展开的卡片！(0延迟极速响应)
+                // ✨ 用户一旦自己动了滚轮，瞬间解除一切强制锁定！
+                this._lockedActiveId = null;
+
                 if (this._forceExpandedCardId !== null) {
                     this._forceExpandedCardId = null;
                     this.listRoot?.querySelectorAll('.annotation-card.force-expand').forEach(el => el.classList.remove('force-expand'));
@@ -492,25 +496,26 @@ class FootnoteListView extends ItemView {
             }
         }, { capture: true });
 
-        // ✨ 新增全局监听：接收在正文里点击“变体文本”的求助信号
-        this.registerDomEvent(window, 'footnote-compass-expand-card', (e: Event) => {
+        // ✨ 接收在正文里点击“变体文本”的求助信号 (用 (this as any) 绕过 Obsidian 官方对标准 DOM 事件字典的严格重载检查)
+        (this as any).registerDomEvent(window, 'footnote-compass-expand-card', (e: Event) => {
             const customEvent = e as CustomEvent;
             const targetId = customEvent.detail?.annoId;
             if (!targetId || !this.listRoot) return;
 
+            this._lockedActiveId = targetId; // ✨ 绝对锁定：告诉系统接下来只认这个ID，别乱算！
+            this.isNavigating = true;
+            setTimeout(() => { this.isNavigating = false; }, 800);
+
             // 根据 ID 揪出对应的卡片
             const targetCard = this.listRoot.querySelector(`.annotation-card[data-anno-id="${targetId}"]`) as HTMLElement;
             if (targetCard) {
-                // 1. 强行设为“手动展开”状态，并收起其他的卡片（手风琴效果）
                 this._forceExpandedCardId = targetId;
                 this.listRoot.querySelectorAll('.annotation-card.force-expand').forEach(el => el.classList.remove('force-expand'));
                 targetCard.classList.add('force-expand');
 
-                // 2. 夺走激活高亮（变成白底）
                 this.listRoot.querySelectorAll('.annotation-card.is-active').forEach(el => el.classList.remove('is-active'));
                 targetCard.classList.add('is-active');
 
-                // 3. 丝滑滚动，把这张卡片送到侧边栏正中间！
                 targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         });
@@ -768,6 +773,7 @@ class FootnoteListView extends ItemView {
                     const pColor = anno.phantomColor || this.plugin.settings.defaultPhantomColor;
 
                     card.onclick = () => {
+                        this._lockedActiveId = anno.id; // ✨ 给卡片自身点击上锁
                         // ✨ 新增逻辑：在关闭模式下，点击卡片切换展开状态（手风琴效果：点一个关其他的）
                         if (displayModeStr === "closed") {
                             const wasExpanded = card.classList.contains('force-expand');
@@ -792,12 +798,12 @@ class FootnoteListView extends ItemView {
 
                     card.oncontextmenu = (e) => {
                         e.stopPropagation();
-                        
+
                         // ✨ 1. 添加选中状态类
                         card.classList.add("is-context-active");
 
                         const menu = new Menu();
-                        
+
                         // ✨ 2. 监听菜单消失，移除选中状态
                         menu.onHide(() => {
                             card.classList.remove("is-context-active");
@@ -819,7 +825,7 @@ class FootnoteListView extends ItemView {
                                 new ColorPickerModal(this.app, "选择标注高亮颜色", palette, async (c) => {
                                     // ✨ 修改：如果有颜色就赋值，如果是 null 就删掉该属性(恢复默认)
                                     if (c) {
-                                        anno.highlightColor = c; 
+                                        anno.highlightColor = c;
                                     } else {
                                         delete anno.highlightColor;
                                     }
@@ -834,7 +840,7 @@ class FootnoteListView extends ItemView {
                                 new ColorPickerModal(this.app, "选择替换后颜色", palette, async (c) => {
                                     // ✨ 修改：同理，null 时删掉属性
                                     if (c) {
-                                        anno.phantomColor = c; 
+                                        anno.phantomColor = c;
                                     } else {
                                         delete anno.phantomColor;
                                     }
@@ -898,6 +904,7 @@ class FootnoteListView extends ItemView {
 
                         row.onclick = async (e) => {
                             e.stopPropagation();
+                            this._lockedActiveId = anno.id; // ✨ 给变体条目点击上锁
                             if (this.lastActiveView?.editor?.offsetToPos && anno._tempOffset! < Number.MAX_SAFE_INTEGER) {
                                 this.isNavigating = true; setTimeout(() => { this.isNavigating = false; }, 800);
                                 const pos = this.lastActiveView.editor.offsetToPos(anno._tempOffset!);
@@ -969,36 +976,59 @@ class FootnoteListView extends ItemView {
     syncHighlightToOffset(view: MarkdownView, targetOffset: number) {
         if (!view?.editor || !this.listRoot) return;
         try {
-            let allItems: { el: HTMLElement, offset: number }[] = [];
+            // 携带 ID 进入数组
+            let allItems: { el: HTMLElement, offset: number, id: string }[] = [];
             this.cachedRefs.forEach(ref => {
-                if (ref.el) allItems.push({ el: ref.el, offset: view.editor.posToOffset({ line: ref.line, ch: ref.col }) });
+                if (ref.el) allItems.push({ el: ref.el, offset: view.editor.posToOffset({ line: ref.line, ch: ref.col }), id: ref.key });
             });
             const annos = this.plugin.annoManager.data[view.file?.path || ""] || [];
             annos.forEach(anno => {
                 if (anno.el && anno._tempOffset !== undefined && anno._tempOffset < Number.MAX_SAFE_INTEGER) {
-                    allItems.push({ el: anno.el, offset: anno._tempOffset });
+                    allItems.push({ el: anno.el, offset: anno._tempOffset, id: anno.id });
                 }
             });
 
             if (allItems.length === 0) return;
-            allItems.sort((a, b) => a.offset - b.offset);
 
-            let primaryItem = allItems.slice().reverse().find(item => targetOffset >= item.offset - 15) || allItems[0];
+            // ✨ 1. 纯净的最小绝对距离算法 (彻底修复“同行永远选不对”的恶性BUG)
+            let primaryItem = allItems[0];
+            let minDistance = Infinity;
+            allItems.forEach(item => {
+                let dist = Math.abs(item.offset - targetOffset);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    primaryItem = item;
+                }
+            });
 
-            // ✨ 获取当前的显示模式
+            // ✨ 2. 交互锁定覆盖 (如果在 0.8秒内明确点击了某个卡片，无视光标偏移，系统强行认定它为主目标！)
+            if (this._lockedActiveId) {
+                const lockedItem = allItems.find(i => i.id === this._lockedActiveId);
+                // 只要光标没跑得太远（依然在这行或附近），就维持锁定
+                if (lockedItem && Math.abs(lockedItem.offset - targetOffset) < 150) {
+                    primaryItem = lockedItem;
+                } else {
+                    this._lockedActiveId = null; // 光标去别的地方了，释放锁定
+                }
+            }
+
+            // 获取当前的显示模式
             const displayModeStr = this.plugin.settings.displayModes[view.file?.path || ""] || "original";
             const isClosedMode = displayModeStr === "closed";
 
-            allItems.forEach(item => {
-                const distance = Math.abs(item.offset - targetOffset);
+            // 双保险：若失去锁定，恢复自动关闭
+            if (isClosedMode && !this.isNavigating && this._forceExpandedCardId !== null && this._lockedActiveId === null) {
+                this._forceExpandedCardId = null;
+                this.listRoot.querySelectorAll('.annotation-card.force-expand').forEach(el => el.classList.remove('force-expand'));
+            }
 
+            allItems.forEach(item => {
                 let isActive = false;
                 if (isClosedMode) {
-                    // ✨ 关闭模式下：不允许展开相邻的判定，必须精确匹配 primaryItem
                     isActive = (item === primaryItem);
                 } else {
-                    // 原来的逻辑：距离 <= 30 的相邻判定
-                    isActive = (item === primaryItem || distance <= 30);
+                    // ✨ 3. “多个同时展开”模式下的优化：不再盲目连带展开相邻项（引发疯狂排版跳动），只精准高亮唯一的一项
+                    isActive = (item === primaryItem);
                 }
 
                 if (isActive) item.el.addClass("is-active");
