@@ -1,7 +1,7 @@
 {
   "id": "writing-annotations",
   "name": "写作的标注",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "minAppVersion": "0.15.0",
   "description": "Footnote and hover note compass, with annotation and draft variant management designed for creative writers.",
   "author": "hornat",

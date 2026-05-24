@@ -250,7 +250,7 @@
 }
 
 .annotation-checkbox:checked {
-    border-color: var(--dynamic-color, var(--interactive-accent));
+    border-color: var(--dynamic-color, var(--interactive-accent)) !important;
 }
 
 
