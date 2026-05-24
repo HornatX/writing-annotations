@@ -79,7 +79,7 @@ function normalizeTo7CharHex(hex: string): string | null {
     if (!hex.startsWith('#')) hex = '#' + hex;
     // 如果是 3 位缩写，转换为 6 位
     if (/^#([0-9A-Fa-f]{3})$/i.test(hex)) {
-        return '#' + hex[1]+hex[1] + hex[2]+hex[2] + hex[3]+hex[3];
+        return '#' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
     }
     // 如果是标准的 6 位
     if (/^#([0-9A-Fa-f]{6})$/i.test(hex)) {
@@ -219,11 +219,12 @@ function createAnnotationDecorations(view: EditorView, annotations: Annotation[]
     let needsSave = false;
 
     annotations.forEach(anno => {
+        const oldExpected = anno.expectedOffset; // ✨ 修复 1：记录修复前的预期位置
         const match = findAnnotationOffsetAndHeal(text, anno);
         if (!match) return;
 
-        // 验证自愈是否发生
-        if (match.start !== text.indexOf((anno.prefix || "") + (anno.original || "") + (anno.suffix || "")) + (anno.prefix || "").length) {
+        // ✨ 修复 1：抛弃错误的 indexOf 判定。如果自愈算法真的生效了，它一定会修改 expectedOffset，我们直接对比即可
+        if (anno.expectedOffset !== oldExpected) {
             needsSave = true;
         }
 
@@ -234,7 +235,6 @@ function createAnnotationDecorations(view: EditorView, annotations: Annotation[]
         if (checkedComment) {
             decos.push({
                 from: match.start, to: match.end,
-                // ✨ 修改：在参数最后把 anno.id 传进去
                 deco: Decoration.replace({ widget: new PhantomWidget(checkedComment.text, pColor, anno.id), inclusive: false })
             });
         } else {
@@ -250,27 +250,25 @@ function createAnnotationDecorations(view: EditorView, annotations: Annotation[]
     return builder.finish();
 }
 
+// --- ✨ 修复 2 回退并改良：不再依赖焦点，而是安全遍历所有已打开的 MD 视图 ---
 function updateEditorDecorations(plugin: FootnoteCompassPlugin) {
-    plugin.app.workspace.iterateAllLeaves(leaf => {
-        try {
-            if (leaf.view?.getViewType() === 'markdown') {
-                const mdView = leaf.view as MarkdownView;
-                // ✨ 修复 1：如果是在阅读模式下 (无编辑器)，直接跳过，防止底层抛出异常
-                if (!mdView.editor) return; 
+    try {
+        // 直接获取当前打开的所有 Markdown 面板
+        const leaves = plugin.app.workspace.getLeavesOfType('markdown');
+        for (let leaf of leaves) {
+            const mdView = leaf.view as MarkdownView;
+            if (!mdView.editor || !mdView.file) continue;
 
-                // 通过 any 绕过官方未暴露的 cm 属性
-                const cm = (mdView.editor as any).cm as EditorView;
-                if (cm && mdView.file) {
-                    const annos = plugin.annoManager.data[mdView.file.path] || [];
-                    const decos = createAnnotationDecorations(cm, annos, plugin);
-                    cm.dispatch({ effects: AnnotationStateEffect.of(decos) });
-                }
+            const cm = (mdView.editor as any).cm as EditorView;
+            if (cm) {
+                const annos = plugin.annoManager.data[mdView.file.path] || [];
+                const decos = createAnnotationDecorations(cm, annos, plugin);
+                cm.dispatch({ effects: AnnotationStateEffect.of(decos) });
             }
-        } catch (e) {
-            // ✨ 修复 2：即使出错，也静默拦截，绝对不能打断后续的 UI 刷新
-            console.warn("FootnoteCompass 装饰器更新拦截异常:", e);
         }
-    });
+    } catch (e) {
+        console.warn("FootnoteCompass 活动视图装饰器更新异常:", e);
+    }
 }
 
 // --- 数据存储管理器 (原子操作强化) ---
@@ -292,12 +290,21 @@ class AnnotationManager {
         const file = this.plugin.app.vault.getAbstractFileByPath(path);
         if (file instanceof TFile) {
             const content = await this.plugin.app.vault.read(file);
-            const match = content.match(/```json\r?\n([\s\S]*?)\r?\n```/);
+            // ✨ 兼容性修复：既能认出新的安全格式，也能认出旧的格式
+            const match = content.match(/<!-- FC_DATA_START -->\r?\n```json\r?\n([\s\S]*?)\r?\n```\r?\n<!-- FC_DATA_END -->/)
+                || content.match(/```json\r?\n([\s\S]*?)\r?\n```/);
+
             if (match) {
                 try {
                     this.data = JSON.parse(match[1]);
                 } catch (e) {
                     console.error("解析变体数据失败", e);
+                    // 🚨 熔断保护：如果用户的 JSON 损坏了解析失败，立刻发出最高级别警告！
+                    new Notice("🚨 致命错误：大纲变体标注数据库的 JSON 格式损坏！\n为防止数据被清空，已强制暂停保存功能。请检查数据库文件！", 15000);
+
+                    // 绝对不能设为 true！这样能拦截一切后续的 save() 覆盖行为
+                    this.isLoaded = false;
+                    return; // 直接中止加载流程
                 }
             }
         }
@@ -314,17 +321,38 @@ class AnnotationManager {
         if (!this.isLoaded) return;
         const path = normalizePath(this.plugin.settings.annotationFilePath);
         let file = this.plugin.app.vault.getAbstractFileByPath(path);
-        const jsonStr = JSON.stringify(this.data, null, 2);
-        const newBlock = `\`\`\`json\n${jsonStr}\n\`\`\``;
+
+        // 🚀 修复：增加一个“过滤规则”，保存时主动扔掉 el 节点和临时 _temp 变量
+        const jsonStr = JSON.stringify(this.data, (key, value) => {
+            if (key === 'el' || key === '_tempOffset' || key === '_exportOffset') {
+                return undefined; // 遇到这三个字段，不要保存进文件，直接跳过
+            }
+            return value;
+        }, 2);
+
+        const newBlock = `<!-- FC_DATA_START -->\n\`\`\`json\n${jsonStr}\n\`\`\`\n<!-- FC_DATA_END -->`;
         const defaultContent = `# 📚 小说标注与变体数据库\n> ⚠️ 请不要手动修改下面的代码块，这是插件自动维护的！这保证了你的数据可以随笔记一起安全备份。\n\n${newBlock}\n`;
 
         try {
             if (file instanceof TFile) {
                 await this.plugin.app.vault.process(file, (data) => {
-                    const match = data.match(/```json\r?\n([\s\S]*?)\r?\n```/);
-                    if (match) return data.replace(/```json\r?\n([\s\S]*?)\r?\n```/, newBlock);
-                    return defaultContent; // 若被破坏，直接重置模板
+                    const regexNew = /<!-- FC_DATA_START -->\r?\n```json\r?\n([\s\S]*?)\r?\n```\r?\n<!-- FC_DATA_END -->/;
+                    const regexOld = /```json\r?\n([\s\S]*?)\r?\n```/;
+
+                    if (data.match(regexNew)) return data.replace(regexNew, newBlock);
+                    if (data.match(regexOld)) return data.replace(regexOld, newBlock);
+
+                    // ✅ 安全修复：如果找不到旧的数据块，千万不要用默认模板覆盖！
+                    // 而是把新的数据块“追加(Append)”到文件最末尾，保留用户原本写的所有内容。
+                    // 如果原文件完全为空，才使用带有提示语的 defaultContent。
+                    if (data.trim().length === 0) {
+                        return defaultContent;
+                    } else {
+                        // 使用 replace(/\s+$/, "") 剔除文件末尾的多余空行，兼容所有JS版本，消除红线
+                        return data.replace(/\s+$/, "") + "\n\n" + newBlock + "\n";
+                    }
                 });
+
             } else {
                 await this.plugin.app.vault.create(path, defaultContent);
             }
@@ -523,8 +551,9 @@ class FootnoteListView extends ItemView {
         this.plugin = plugin;
 
         this.debouncedSync = debounce(() => {
-            const activeLeaf = this.app.workspace.activeLeaf;
-            if (activeLeaf?.view instanceof MarkdownView) this.syncHighlightWithCursor(activeLeaf.view);
+            // ✅ 官方最新规范：直接获取当前激活的 Markdown 视图
+            const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+            if (activeView) this.syncHighlightWithCursor(activeView);
         }, 100, true);
 
         this.debouncedScrollSync = debounce((view: MarkdownView) => {
@@ -629,8 +658,11 @@ class FootnoteListView extends ItemView {
     }
 
     findBestLeaf(): WorkspaceLeaf | null {
-        const active = this.app.workspace.activeLeaf;
-        if (active && (active.view.getViewType() === 'markdown' || active.view.getViewType() === 'kanban')) return active;
+        // ✅ 先尝试获取当前最活跃的 Markdown 视图所在的 Leaf
+        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+        if (activeView && activeView.leaf) return activeView.leaf;
+
+        // 如果没有活跃的，再退而求其次随便找一个打开的 markdown 窗口
         const leaves = this.app.workspace.getLeavesOfType('markdown');
         return leaves.length > 0 ? leaves[0] : null;
     }
@@ -1125,8 +1157,10 @@ class FootnoteListView extends ItemView {
 
             // 双保险：若失去锁定，恢复自动关闭
             if (isClosedMode && !this.isNavigating && this._forceExpandedCardId !== null && this._lockedActiveId === null) {
+                // 👇 优化：不再使用 querySelectorAll 遍历，直接找确切的那个 DOM
+                const oldExpanded = this.listRoot.querySelector(`.annotation-card[data-anno-id="${this._forceExpandedCardId}"]`);
+                if (oldExpanded) oldExpanded.classList.remove('force-expand');
                 this._forceExpandedCardId = null;
-                this.listRoot.querySelectorAll('.annotation-card.force-expand').forEach(el => el.classList.remove('force-expand'));
             }
 
             allItems.forEach(item => {
@@ -1303,15 +1337,15 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
                 hexInput.value = preset.hex;
                 await this.plugin.saveSettings();
             };
-            
+
             // ✨ 修复 1：颜色预设输入框 防变黑逻辑
             hexInput.oninput = async (e) => {
                 const val = (e.target as HTMLInputElement).value;
                 const validHex = normalizeTo7CharHex(val);
                 // 只有当输入成为合法颜色时，才同步给圆圈选择器和保存
                 if (validHex) {
-                    preset.hex = validHex; 
-                    colorPicker.value = validHex; 
+                    preset.hex = validHex;
+                    colorPicker.value = validHex;
                     await this.plugin.saveSettings();
                 }
             };
@@ -1322,7 +1356,7 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
                 if (validHex) {
                     hexInput.value = validHex;
                 } else {
-                    hexInput.value = preset.hex; 
+                    hexInput.value = preset.hex;
                 }
             };
 
@@ -1399,7 +1433,7 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
             const trashBtn = actionCol.createEl("button", { text: "移至回收区", cls: "db-btn-trash" });
             trashBtn.onclick = async () => {
                 // ✨ 修复 4：防双击机制，点过一次后如果数据已空直接返回
-                if (!this.plugin.annoManager.data[key]) return; 
+                if (!this.plugin.annoManager.data[key]) return;
 
                 this.plugin.annoManager.data[`${TRASH_PREFIX}${key}`] = this.plugin.annoManager.data[key];
                 delete this.plugin.annoManager.data[key];
@@ -1452,7 +1486,7 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
             const restoreBtn = actionCol.createEl("button", { text: "反悔恢复", cls: "db-btn-restore" });
             restoreBtn.onclick = async () => {
                 if (!this.plugin.annoManager.data[key]) return; // 防双击
-                
+
                 this.plugin.annoManager.data[originalPath] = this.plugin.annoManager.data[key];
                 delete this.plugin.annoManager.data[key];
                 await this.plugin.annoManager.save();
@@ -1477,12 +1511,12 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
         setTimeout(() => {
             const firstInput = containerEl.querySelector('input[type="text"]') as HTMLElement;
             if (firstInput && document.activeElement === firstInput) {
-                firstInput.blur(); 
+                firstInput.blur();
             }
         }, 50);
     }
 
-createColorSetting(containerEl: HTMLElement, name: string, desc: string, settingKey: keyof FootnoteCompassSettings) {
+    createColorSetting(containerEl: HTMLElement, name: string, desc: string, settingKey: keyof FootnoteCompassSettings) {
         let colorComp: any, textComp: any;
         new Setting(containerEl).setName(name).setDesc(desc)
             .addColorPicker(color => {
@@ -1491,7 +1525,7 @@ createColorSetting(containerEl: HTMLElement, name: string, desc: string, setting
                     (this.plugin.settings as any)[settingKey] = val;
                     if (textComp) textComp.setValue(val);
                     await this.plugin.saveSettings();
-                    this.plugin.applyDynamicStyles(); 
+                    this.plugin.applyDynamicStyles();
                     updateEditorDecorations(this.plugin);
                     this.forceRefreshSidebar();
                 });
@@ -1643,14 +1677,22 @@ export default class FootnoteCompassPlugin extends Plugin {
                             new Notice("无法对空字符添加标注！");
                             return;
                         }
-                        const cursor = editor.getCursor('from');
-                        const lineText = editor.getLine(cursor.line);
-                        // ✨ 修复：将前后文抓取长度从 10 提升到 30，确保上下文在全文中的绝对唯一性
-                        const prefix = lineText.substring(Math.max(0, cursor.ch - 30), cursor.ch);
-                        const suffix = lineText.substring(cursor.ch + selectedText.length, cursor.ch + selectedText.length + 30);
+
+                        // 👇 修复：检查是否跨行选择
+                        const cursorFrom = editor.getCursor('from');
+                        const cursorTo = editor.getCursor('to');
+                        if (cursorFrom.line !== cursorTo.line) {
+                            new Notice("⚠️ 暂不支持跨行添加标注，请在同一段落内选择！");
+                            return;
+                        }
+
+                        const lineText = editor.getLine(cursorFrom.line);
+                        // 安全截取前后文
+                        const prefix = lineText.substring(Math.max(0, cursorFrom.ch - 30), cursorFrom.ch);
+                        const suffix = lineText.substring(cursorTo.ch, Math.min(lineText.length, cursorTo.ch + 30));
                         const path = view.file!.path;
 
-                        const expectedOffset = editor.posToOffset(cursor);
+                        const expectedOffset = editor.posToOffset(cursorFrom);
 
                         if (!this.annoManager.data[path]) this.annoManager.data[path] = [];
                         this.annoManager.data[path].push({ id: generateUUID(), original: selectedText, prefix, suffix, expectedOffset, comments: [] });
@@ -1678,7 +1720,7 @@ export default class FootnoteCompassPlugin extends Plugin {
 
     applyBeautifyStyle() { document.body.classList.toggle('footnote-beautify-enabled', this.settings.beautifyEnabled); }
 
-// 👇 修改：加入安全默认值，防止旧数据生成 "undefinedpx"
+    // 👇 修改：加入安全默认值，防止旧数据生成 "undefinedpx"
     applyDynamicStyles() {
         const flashColor = this.settings.flashingColor || "#EEE7DD";
 

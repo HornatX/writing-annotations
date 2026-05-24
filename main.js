@@ -152,9 +152,10 @@ function createAnnotationDecorations(view, annotations, plugin) {
   const decos = [];
   let needsSave = false;
   annotations.forEach((anno) => {
+    const oldExpected = anno.expectedOffset;
     const match = findAnnotationOffsetAndHeal(text, anno);
     if (!match) return;
-    if (match.start !== text.indexOf((anno.prefix || "") + (anno.original || "") + (anno.suffix || "")) + (anno.prefix || "").length) {
+    if (anno.expectedOffset !== oldExpected) {
       needsSave = true;
     }
     const hColor = anno.highlightColor || plugin.settings.defaultHighlightColor;
@@ -164,7 +165,6 @@ function createAnnotationDecorations(view, annotations, plugin) {
       decos.push({
         from: match.start,
         to: match.end,
-        // ✨ 修改：在参数最后把 anno.id 传进去
         deco: import_view.Decoration.replace({ widget: new PhantomWidget(checkedComment.text, pColor, anno.id), inclusive: false })
       });
     } else {
@@ -180,22 +180,21 @@ function createAnnotationDecorations(view, annotations, plugin) {
   return builder.finish();
 }
 function updateEditorDecorations(plugin) {
-  plugin.app.workspace.iterateAllLeaves((leaf) => {
-    try {
-      if (leaf.view?.getViewType() === "markdown") {
-        const mdView = leaf.view;
-        if (!mdView.editor) return;
-        const cm = mdView.editor.cm;
-        if (cm && mdView.file) {
-          const annos = plugin.annoManager.data[mdView.file.path] || [];
-          const decos = createAnnotationDecorations(cm, annos, plugin);
-          cm.dispatch({ effects: AnnotationStateEffect.of(decos) });
-        }
+  try {
+    const leaves = plugin.app.workspace.getLeavesOfType("markdown");
+    for (let leaf of leaves) {
+      const mdView = leaf.view;
+      if (!mdView.editor || !mdView.file) continue;
+      const cm = mdView.editor.cm;
+      if (cm) {
+        const annos = plugin.annoManager.data[mdView.file.path] || [];
+        const decos = createAnnotationDecorations(cm, annos, plugin);
+        cm.dispatch({ effects: AnnotationStateEffect.of(decos) });
       }
-    } catch (e) {
-      console.warn("FootnoteCompass \u88C5\u9970\u5668\u66F4\u65B0\u62E6\u622A\u5F02\u5E38:", e);
     }
-  });
+  } catch (e) {
+    console.warn("FootnoteCompass \u6D3B\u52A8\u89C6\u56FE\u88C5\u9970\u5668\u66F4\u65B0\u5F02\u5E38:", e);
+  }
 }
 var AnnotationManager = class {
   constructor(plugin) {
@@ -209,12 +208,15 @@ var AnnotationManager = class {
     const file = this.plugin.app.vault.getAbstractFileByPath(path);
     if (file instanceof import_obsidian.TFile) {
       const content = await this.plugin.app.vault.read(file);
-      const match = content.match(/```json\r?\n([\s\S]*?)\r?\n```/);
+      const match = content.match(/<!-- FC_DATA_START -->\r?\n```json\r?\n([\s\S]*?)\r?\n```\r?\n<!-- FC_DATA_END -->/) || content.match(/```json\r?\n([\s\S]*?)\r?\n```/);
       if (match) {
         try {
           this.data = JSON.parse(match[1]);
         } catch (e) {
           console.error("\u89E3\u6790\u53D8\u4F53\u6570\u636E\u5931\u8D25", e);
+          new import_obsidian.Notice("\u{1F6A8} \u81F4\u547D\u9519\u8BEF\uFF1A\u5927\u7EB2\u53D8\u4F53\u6807\u6CE8\u6570\u636E\u5E93\u7684 JSON \u683C\u5F0F\u635F\u574F\uFF01\n\u4E3A\u9632\u6B62\u6570\u636E\u88AB\u6E05\u7A7A\uFF0C\u5DF2\u5F3A\u5236\u6682\u505C\u4FDD\u5B58\u529F\u80FD\u3002\u8BF7\u68C0\u67E5\u6570\u636E\u5E93\u6587\u4EF6\uFF01", 15e3);
+          this.isLoaded = false;
+          return;
         }
       }
     }
@@ -229,10 +231,17 @@ var AnnotationManager = class {
     if (!this.isLoaded) return;
     const path = (0, import_obsidian.normalizePath)(this.plugin.settings.annotationFilePath);
     let file = this.plugin.app.vault.getAbstractFileByPath(path);
-    const jsonStr = JSON.stringify(this.data, null, 2);
-    const newBlock = `\`\`\`json
+    const jsonStr = JSON.stringify(this.data, (key, value) => {
+      if (key === "el" || key === "_tempOffset" || key === "_exportOffset") {
+        return void 0;
+      }
+      return value;
+    }, 2);
+    const newBlock = `<!-- FC_DATA_START -->
+\`\`\`json
 ${jsonStr}
-\`\`\``;
+\`\`\`
+<!-- FC_DATA_END -->`;
     const defaultContent = `# \u{1F4DA} \u5C0F\u8BF4\u6807\u6CE8\u4E0E\u53D8\u4F53\u6570\u636E\u5E93
 > \u26A0\uFE0F \u8BF7\u4E0D\u8981\u624B\u52A8\u4FEE\u6539\u4E0B\u9762\u7684\u4EE3\u7801\u5757\uFF0C\u8FD9\u662F\u63D2\u4EF6\u81EA\u52A8\u7EF4\u62A4\u7684\uFF01\u8FD9\u4FDD\u8BC1\u4E86\u4F60\u7684\u6570\u636E\u53EF\u4EE5\u968F\u7B14\u8BB0\u4E00\u8D77\u5B89\u5168\u5907\u4EFD\u3002
 
@@ -241,9 +250,15 @@ ${newBlock}
     try {
       if (file instanceof import_obsidian.TFile) {
         await this.plugin.app.vault.process(file, (data) => {
-          const match = data.match(/```json\r?\n([\s\S]*?)\r?\n```/);
-          if (match) return data.replace(/```json\r?\n([\s\S]*?)\r?\n```/, newBlock);
-          return defaultContent;
+          const regexNew = /<!-- FC_DATA_START -->\r?\n```json\r?\n([\s\S]*?)\r?\n```\r?\n<!-- FC_DATA_END -->/;
+          const regexOld = /```json\r?\n([\s\S]*?)\r?\n```/;
+          if (data.match(regexNew)) return data.replace(regexNew, newBlock);
+          if (data.match(regexOld)) return data.replace(regexOld, newBlock);
+          if (data.trim().length === 0) {
+            return defaultContent;
+          } else {
+            return data.replace(/\s+$/, "") + "\n\n" + newBlock + "\n";
+          }
         });
       } else {
         await this.plugin.app.vault.create(path, defaultContent);
@@ -424,8 +439,8 @@ var FootnoteListView = class extends import_obsidian.ItemView {
     this._lockedActiveId = null;
     this.plugin = plugin;
     this.debouncedSync = (0, import_obsidian.debounce)(() => {
-      const activeLeaf = this.app.workspace.activeLeaf;
-      if (activeLeaf?.view instanceof import_obsidian.MarkdownView) this.syncHighlightWithCursor(activeLeaf.view);
+      const activeView = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+      if (activeView) this.syncHighlightWithCursor(activeView);
     }, 100, true);
     this.debouncedScrollSync = (0, import_obsidian.debounce)((view) => {
       const cm = view.editor.cm;
@@ -515,8 +530,8 @@ var FootnoteListView = class extends import_obsidian.ItemView {
     setTimeout(() => this.checkAndUpdate(), 300);
   }
   findBestLeaf() {
-    const active = this.app.workspace.activeLeaf;
-    if (active && (active.view.getViewType() === "markdown" || active.view.getViewType() === "kanban")) return active;
+    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+    if (activeView && activeView.leaf) return activeView.leaf;
     const leaves = this.app.workspace.getLeavesOfType("markdown");
     return leaves.length > 0 ? leaves[0] : null;
   }
@@ -948,8 +963,9 @@ var FootnoteListView = class extends import_obsidian.ItemView {
       const displayModeStr = this.plugin.settings.displayModes[view.file?.path || ""] || "original";
       const isClosedMode = displayModeStr === "closed";
       if (isClosedMode && !this.isNavigating && this._forceExpandedCardId !== null && this._lockedActiveId === null) {
+        const oldExpanded = this.listRoot.querySelector(`.annotation-card[data-anno-id="${this._forceExpandedCardId}"]`);
+        if (oldExpanded) oldExpanded.classList.remove("force-expand");
         this._forceExpandedCardId = null;
-        this.listRoot.querySelectorAll(".annotation-card.force-expand").forEach((el) => el.classList.remove("force-expand"));
       }
       allItems.forEach((item) => {
         let isActive = false;
@@ -1373,12 +1389,17 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
               new import_obsidian.Notice("\u65E0\u6CD5\u5BF9\u7A7A\u5B57\u7B26\u6DFB\u52A0\u6807\u6CE8\uFF01");
               return;
             }
-            const cursor = editor.getCursor("from");
-            const lineText = editor.getLine(cursor.line);
-            const prefix = lineText.substring(Math.max(0, cursor.ch - 30), cursor.ch);
-            const suffix = lineText.substring(cursor.ch + selectedText.length, cursor.ch + selectedText.length + 30);
+            const cursorFrom = editor.getCursor("from");
+            const cursorTo = editor.getCursor("to");
+            if (cursorFrom.line !== cursorTo.line) {
+              new import_obsidian.Notice("\u26A0\uFE0F \u6682\u4E0D\u652F\u6301\u8DE8\u884C\u6DFB\u52A0\u6807\u6CE8\uFF0C\u8BF7\u5728\u540C\u4E00\u6BB5\u843D\u5185\u9009\u62E9\uFF01");
+              return;
+            }
+            const lineText = editor.getLine(cursorFrom.line);
+            const prefix = lineText.substring(Math.max(0, cursorFrom.ch - 30), cursorFrom.ch);
+            const suffix = lineText.substring(cursorTo.ch, Math.min(lineText.length, cursorTo.ch + 30));
             const path = view.file.path;
-            const expectedOffset = editor.posToOffset(cursor);
+            const expectedOffset = editor.posToOffset(cursorFrom);
             if (!this.annoManager.data[path]) this.annoManager.data[path] = [];
             this.annoManager.data[path].push({ id: generateUUID(), original: selectedText, prefix, suffix, expectedOffset, comments: [] });
             await this.annoManager.save();
