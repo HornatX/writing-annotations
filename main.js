@@ -633,7 +633,7 @@ var FootnoteListView = class extends import_obsidian.ItemView {
         };
         const displayModeStr = this.plugin.settings.displayModes[filePath] || "original";
         if (this.listRoot) this.listRoot.dataset.displayMode = displayModeStr;
-        const modeMap = { "original": "\u6807\u9898", "variant": "\u53D8\u4F53", "both": "\u540C\u65F6", "closed": "\u5173\u95ED" };
+        const modeMap = { "original": "\u6807\u9898", "variant": "\u5206\u652F", "both": "\u540C\u65F6", "closed": "\u5173\u95ED" };
         const displayModeBtn = rightControls.createEl("button", {
           text: `${modeMap[displayModeStr]} \u25BE`,
           cls: "compass-ui-btn"

@@ -770,7 +770,7 @@ class FootnoteListView extends ItemView {
                 if (this.listRoot) this.listRoot.dataset.displayMode = displayModeStr;
 
                 // ✨ 新增：加入了 "closed": "关闭" 选项
-                const modeMap: Record<string, string> = { "original": "标题", "variant": "变体", "both": "同时", "closed": "关闭" };
+                const modeMap: Record<string, string> = { "original": "标题", "variant": "分支", "both": "同时", "closed": "关闭" };
 
                 const displayModeBtn = rightControls.createEl("button", {
                     text: `${modeMap[displayModeStr]} ▾`,
