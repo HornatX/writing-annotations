@@ -27,6 +27,9 @@ export interface FootnoteCompassSettings {
     headingFilters: Record<string, string>; // 新增：保存每个文件的标题过滤偏好
     displayModes: Record<string, string>; // ✨ 新增：保存每个文件的“标题显示模式”偏好
     headingColor: string; // 新增：侧边栏分类标题颜色
+    // 👇 新增以下三个字段
+    flashingColor: string;     // 👈 新增：选区高亮颜色
+
 }
 
 export interface AnnotationComment {
@@ -68,6 +71,23 @@ function generateUUID(): string {
 }
 
 // --- 工具：Hex 转 RGBA ---
+
+
+// --- 工具：Hex转合法 7 位字符 (修复颜色选择器变黑Bug) ---
+function normalizeTo7CharHex(hex: string): string | null {
+    hex = hex.trim();
+    if (!hex.startsWith('#')) hex = '#' + hex;
+    // 如果是 3 位缩写，转换为 6 位
+    if (/^#([0-9A-Fa-f]{3})$/i.test(hex)) {
+        return '#' + hex[1]+hex[1] + hex[2]+hex[2] + hex[3]+hex[3];
+    }
+    // 如果是标准的 6 位
+    if (/^#([0-9A-Fa-f]{6})$/i.test(hex)) {
+        return hex;
+    }
+    return null; // 不合法时返回 null
+}
+
 function hexToRgba(hex: string, alpha: number): string {
     if (!/^#([0-9A-Fa-f]{3}){1,2}$/.test(hex)) return hex;
     let c: any = hex.substring(1).split('');
@@ -401,9 +421,9 @@ class CommentModal extends Modal {
 // --- 数据库管理：重新关联文件的模态框 ---
 class RelinkModal extends Modal {
     constructor(
-        app: App, 
-        public oldPath: string, 
-        public plugin: FootnoteCompassPlugin, 
+        app: App,
+        public oldPath: string,
+        public plugin: FootnoteCompassPlugin,
         public onSuccess: () => void
     ) {
         super(app);
@@ -412,16 +432,16 @@ class RelinkModal extends Modal {
     onOpen() {
         const { contentEl } = this;
         this.setTitle("重新指定文件映射");
-        
+
         // 提取丢掉的文件名（比如 "全局.md"）
         const missingFileName = this.oldPath.split('/').pop() || "";
-        
-        contentEl.createEl("p", { 
+
+        contentEl.createEl("p", {
             text: `记录中的文件为：【${this.oldPath}】\n由于被外部移动或删除，现已断联。`,
-            cls: "annotation-confirm-msg" 
+            cls: "annotation-confirm-msg"
         });
 
-        contentEl.createEl("p", { 
+        contentEl.createEl("p", {
             text: `⚠️ 强制安全规则：你只能将其重新关联到名为 "${missingFileName}" 的文件。`,
             cls: "annotation-confirm-msg",
             attr: { style: "color: var(--text-warning); font-size: 13px;" }
@@ -433,21 +453,21 @@ class RelinkModal extends Modal {
         const listContainer = contentEl.createDiv({ cls: "relink-file-list" });
 
         if (matchingFiles.length === 0) {
-            listContainer.createDiv({ 
-                text: "❌ 在当前整个知识库中，没有找到同名文件。如果你在外部改名了，请先改回原名。", 
+            listContainer.createDiv({
+                text: "❌ 在当前整个知识库中，没有找到同名文件。如果你在外部改名了，请先改回原名。",
                 attr: { style: "color: var(--text-error); padding: 10px; background: var(--background-modifier-error);" }
             });
         } else {
             matchingFiles.forEach(file => {
-                const btn = listContainer.createEl("button", { 
+                const btn = listContainer.createEl("button", {
                     text: `🔗 关联至: ${file.path}`,
-                    cls: "relink-file-btn" 
+                    cls: "relink-file-btn"
                 });
                 btn.onclick = async () => {
                     // 核心数据转移逻辑
                     this.plugin.annoManager.data[file.path] = this.plugin.annoManager.data[this.oldPath];
                     delete this.plugin.annoManager.data[this.oldPath];
-                    
+
                     // 转移UI偏好
                     if (this.plugin.settings.headingFilters[this.oldPath]) {
                         this.plugin.settings.headingFilters[file.path] = this.plugin.settings.headingFilters[this.oldPath];
@@ -460,7 +480,7 @@ class RelinkModal extends Modal {
 
                     await this.plugin.annoManager.save();
                     await this.plugin.saveSettings();
-                    
+
                     // 刷新UI和正文装饰器
                     updateEditorDecorations(this.plugin);
                     this.onSuccess();
@@ -711,7 +731,7 @@ class FootnoteListView extends ItemView {
                 const headerContainer = fragment.createDiv({ cls: "annotation-section-header" });
 
                 // 左侧：固定标题
-                headerContainer.createDiv({ cls: "annotation-divider", text: "📌 文本变体标注" });
+                headerContainer.createDiv({ cls: "annotation-divider", text: "📌 标注" });
 
                 // 右侧控制区
                 const rightControls = headerContainer.createDiv({
@@ -886,8 +906,8 @@ class FootnoteListView extends ItemView {
                         });
 
                         menu.addItem((item) => {
-                            item.setTitle("添加新变体").setIcon("list-plus").onClick(() => {
-                                new CommentModal(this.app, "添加新变体", "", async (text) => {
+                            item.setTitle("添加分支").setIcon("list-plus").onClick(() => {
+                                new CommentModal(this.app, "添加分支", "", async (text) => {
                                     if (!anno.comments) anno.comments = [];
                                     anno.comments.push({ id: generateUUID(), text, checked: false });
                                     await this.plugin.annoManager.save();
@@ -897,7 +917,7 @@ class FootnoteListView extends ItemView {
                         });
                         menu.addSeparator();
                         menu.addItem((item) => {
-                            item.setTitle("修改当前标注颜色").setIcon("highlighter").onClick(() => {
+                            item.setTitle("修改标注颜色").setIcon("highlighter").onClick(() => {
                                 new ColorPickerModal(this.app, "选择标注高亮颜色", palette, async (c) => {
                                     // ✨ 修改：如果有颜色就赋值，如果是 null 就删掉该属性(恢复默认)
                                     if (c) {
@@ -912,8 +932,8 @@ class FootnoteListView extends ItemView {
                         });
 
                         menu.addItem((item) => {
-                            item.setTitle("修改当前变体颜色").setIcon("paintbrush").onClick(() => {
-                                new ColorPickerModal(this.app, "选择替换后颜色", palette, async (c) => {
+                            item.setTitle("修改分支颜色").setIcon("paintbrush").onClick(() => {
+                                new ColorPickerModal(this.app, "选择分支颜色", palette, async (c) => {
                                     // ✨ 修改：同理，null 时删掉属性
                                     if (c) {
                                         anno.phantomColor = c;
@@ -1247,6 +1267,12 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
         this.createColorSetting(containerEl, "默认替换后变体颜色", "在正文中替换成变体文字后的文字和边框颜色。", 'defaultPhantomColor');
         this.createColorSetting(containerEl, "侧边栏分类标题颜色", "在侧边栏中基于H1-H6分类显示的标题文本颜色。", 'headingColor');
 
+
+        // 👇 新增：选区背景颜色
+        this.createColorSetting(containerEl, "选区背景高亮颜色", "修改选区高亮时的背景颜色（对应 .is-flashing 的背景色）。", 'flashingColor');
+
+        // 🚨 删掉这里原本的两个 new Setting(containerEl) 标题字号和分支字号 🚨
+
         const colorSection = containerEl.createDiv({ cls: "color-preset-section" });
         const headerDiv = colorSection.createDiv({ cls: "color-preset-header" });
         headerDiv.createEl("h3", { text: "颜色预设管理" });
@@ -1269,11 +1295,29 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
                 hexInput.value = preset.hex;
                 await this.plugin.saveSettings();
             };
-            hexInput.onchange = async (e) => {
-                let val = (e.target as HTMLInputElement).value;
-                val = val.startsWith("#") ? val : "#" + val;
-                preset.hex = val; colorPicker.value = val; await this.plugin.saveSettings();
+            
+            // ✨ 修复 1：颜色预设输入框 防变黑逻辑
+            hexInput.oninput = async (e) => {
+                const val = (e.target as HTMLInputElement).value;
+                const validHex = normalizeTo7CharHex(val);
+                // 只有当输入成为合法颜色时，才同步给圆圈选择器和保存
+                if (validHex) {
+                    preset.hex = validHex; 
+                    colorPicker.value = validHex; 
+                    await this.plugin.saveSettings();
+                }
             };
+            // 失去焦点时，如果不合法，恢复为上次正确的颜色
+            hexInput.onblur = (e) => {
+                const val = (e.target as HTMLInputElement).value;
+                const validHex = normalizeTo7CharHex(val);
+                if (validHex) {
+                    hexInput.value = validHex;
+                } else {
+                    hexInput.value = preset.hex; 
+                }
+            };
+
             const delBtn = item.createDiv({ cls: "color-preset-del" });
             setIcon(delBtn, "trash");
             delBtn.onclick = async () => {
@@ -1281,17 +1325,17 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
                 await this.plugin.saveSettings(); this.display();
             };
         });
-// ==========================================
+        // ==========================================
         // ✨ 新增：数据库底层映射与回收站管理面板 (纯净版UI)
         // ==========================================
         containerEl.createEl("h3", { text: "数据库文件映射管理", cls: "setting-section-header" });
-        containerEl.createEl("p", { 
-            text: "当你发现在外部（如 Win10 文件夹）移动或删除了文件导致标注失效时，可以在这里进行安全找回或彻底清理。", 
-            cls: "setting-item-description" 
+        containerEl.createEl("p", {
+            text: "当你发现在外部（如 Win10 文件夹）移动或删除了文件导致标注失效时，可以在这里进行安全找回或彻底清理。",
+            cls: "setting-item-description"
         });
 
         const dbContainer = containerEl.createDiv({ cls: "db-manager-container" });
-        
+
         const TRASH_PREFIX = "__TRASH__";
         const allKeys = Object.keys(this.plugin.annoManager.data);
         const activeKeys = allKeys.filter(k => !k.startsWith(TRASH_PREFIX));
@@ -1300,7 +1344,7 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
         // --- 1. 当前生效的标注文件区 ---
         dbContainer.createEl("h4", { text: "当前有效记录", cls: "db-section-title" });
         const activeTable = dbContainer.createDiv({ cls: "db-table" });
-        
+
         const headerRow = activeTable.createDiv({ cls: "db-row db-header" });
         headerRow.createDiv({ text: "状态", cls: "db-col db-col-status" });
         headerRow.createDiv({ text: "记录中的路径 (Key)", cls: "db-col db-col-path" });
@@ -1314,18 +1358,18 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
         activeKeys.forEach(key => {
             const isExist = this.app.vault.getAbstractFileByPath(key) != null;
             const count = this.plugin.annoManager.data[key].length;
-            
+
             if (count === 0) {
                 delete this.plugin.annoManager.data[key];
                 return;
             }
 
             const row = activeTable.createDiv({ cls: `db-row ${!isExist ? 'db-row-missing' : ''}` });
-            
+
             row.createDiv({ text: isExist ? "正常" : "丢失", cls: "db-col db-col-status" });
             row.createDiv({ text: key, cls: "db-col db-col-path" });
             row.createDiv({ text: `${count} 条`, cls: "db-col db-col-count" });
-            
+
             const actionCol = row.createDiv({ cls: "db-col db-col-action" });
             if (!isExist) {
                 const relinkBtn = actionCol.createEl("button", { text: "重新指定", cls: "db-btn-relink" });
@@ -1336,7 +1380,7 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
                     }).open();
                 };
             }
-            
+
             const trashBtn = actionCol.createEl("button", { text: "移至回收区", cls: "db-btn-trash" });
             trashBtn.onclick = async () => {
                 this.plugin.annoManager.data[`${TRASH_PREFIX}${key}`] = this.plugin.annoManager.data[key];
@@ -1350,8 +1394,8 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
 
         // --- 2. 回收站区 ---
         const trashHeader = dbContainer.createDiv({ cls: "db-section-title-wrapper" });
-        trashHeader.createEl("h4", { text: "回收站", cls: "db-section-title", attr: { style: "margin:0;" }});
-        
+        trashHeader.createEl("h4", { text: "回收站", cls: "db-section-title", attr: { style: "margin:0;" } });
+
         if (trashKeys.length > 0) {
             const emptyTrashBtn = trashHeader.createEl("button", { text: "清空回收站", cls: "db-btn-trash" });
             emptyTrashBtn.onclick = () => {
@@ -1374,13 +1418,13 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
             const originalPath = key.replace(TRASH_PREFIX, "");
             const count = this.plugin.annoManager.data[key].length;
             const row = trashTable.createDiv({ cls: "db-row db-row-trashed" });
-            
+
             row.createDiv({ text: "已废弃", cls: "db-col db-col-status" });
             row.createDiv({ text: originalPath, cls: "db-col db-col-path", attr: { style: "text-decoration: line-through;" } });
             row.createDiv({ text: `${count} 条`, cls: "db-col db-col-count" });
-            
+
             const actionCol = row.createDiv({ cls: "db-col db-col-action" });
-            
+
             const restoreBtn = actionCol.createEl("button", { text: "反悔恢复", cls: "db-btn-restore" });
             restoreBtn.onclick = async () => {
                 this.plugin.annoManager.data[originalPath] = this.plugin.annoManager.data[key];
@@ -1391,7 +1435,7 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
                 this.display();
                 new Notice("已恢复该记录。");
             };
-            
+
             const delBtn = actionCol.createEl("button", { text: "彻底删除", cls: "db-btn-trash" });
             delBtn.onclick = () => {
                 // ✨ 新增：针对单条彻底删除的 Obsidian 原生二次确认
@@ -1405,7 +1449,7 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
         });
     }
 
-    createColorSetting(containerEl: HTMLElement, name: string, desc: string, settingKey: keyof FootnoteCompassSettings) {
+createColorSetting(containerEl: HTMLElement, name: string, desc: string, settingKey: keyof FootnoteCompassSettings) {
         let colorComp: any, textComp: any;
         new Setting(containerEl).setName(name).setDesc(desc)
             .addColorPicker(color => {
@@ -1414,21 +1458,24 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
                     (this.plugin.settings as any)[settingKey] = val;
                     if (textComp) textComp.setValue(val);
                     await this.plugin.saveSettings();
+                    this.plugin.applyDynamicStyles(); 
                     updateEditorDecorations(this.plugin);
-                    this.forceRefreshSidebar(); // ✨ 立即刷新侧边栏颜色
+                    this.forceRefreshSidebar();
                 });
             })
             .addText(text => {
                 textComp = text;
                 text.setValue(this.plugin.settings[settingKey] as string).onChange(async (val) => {
-                    val = val.trim().startsWith("#") ? val.trim() : "#" + val.trim();
-                    (this.plugin.settings as any)[settingKey] = val;
-                    if (/^#([0-9A-Fa-f]{3}){1,2}$/.test(val)) {
-                        if (colorComp) colorComp.setValue(val);
+                    // ✨ 修复 2：全局颜色输入框 防变黑逻辑
+                    const validHex = normalizeTo7CharHex(val);
+                    if (validHex) {
+                        (this.plugin.settings as any)[settingKey] = validHex;
+                        if (colorComp) colorComp.setValue(validHex);
+                        await this.plugin.saveSettings();
+                        this.plugin.applyDynamicStyles();
                         updateEditorDecorations(this.plugin);
+                        this.forceRefreshSidebar();
                     }
-                    await this.plugin.saveSettings();
-                    this.forceRefreshSidebar(); // ✨ 立即刷新侧边栏颜色
                 });
                 text.inputEl.classList.add("color-hex-input"); text.inputEl.style.marginLeft = "8px";
             });
@@ -1451,7 +1498,8 @@ export default class FootnoteCompassPlugin extends Plugin {
             defaultHighlightColor: "#ff4444", defaultPhantomColor: "#009dff", colorPresets: defaultPresets,
             headingFilters: {},
             displayModes: {}, // ✨ 新增：默认值
-            headingColor: "#2196f3" // 新增：默认标题颜色（蓝色）
+            headingColor: "#2196f3", // 新增：默认标题颜色（蓝色）
+            flashingColor: "#EEE7DD",
         }, loadedData);
 
         this.annoManager = new AnnotationManager(this);
@@ -1585,6 +1633,7 @@ export default class FootnoteCompassPlugin extends Plugin {
         }));
 
         this.applyBeautifyStyle();
+        this.applyDynamicStyles(); // ✨ 启动时应用动态 CSS 变量
         this.app.workspace.onLayoutReady(async () => {
             await this.annoManager.load();
             debouncedOutlineUpdate();
@@ -1596,8 +1645,18 @@ export default class FootnoteCompassPlugin extends Plugin {
 
     applyBeautifyStyle() { document.body.classList.toggle('footnote-beautify-enabled', this.settings.beautifyEnabled); }
 
+// 👇 修改：加入安全默认值，防止旧数据生成 "undefinedpx"
+    applyDynamicStyles() {
+        const flashColor = this.settings.flashingColor || "#EEE7DD";
+
+        document.body.style.setProperty('--fc-flashing-color', flashColor);
+
+    }
+
     async onunload() {
         document.body.classList.remove('footnote-beautify-enabled');
+        document.body.style.removeProperty('--fc-flashing-color');
+        // 删掉字号的 removeProperty
         if (this.annoManager) { await this.annoManager.forceSave(); }
     }
 

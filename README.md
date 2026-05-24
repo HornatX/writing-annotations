@@ -3,7 +3,7 @@
 A powerful hybrid Obsidian plugin designed for writers, novelists, and content creators. It provides an elegant sidebar outline for footnotes and allows you to highlight text to manage, preview, and export alternative text variants (revisions/plots) seamlessly.
 
 插件还在测试当中,如果有bug或错误,加群讨论
-QQ交流群:599796635
+QQ交流群:1094620986
 不要处理长文本,这是给小说大纲这种短文本准备的!!!
 
 [简体中文说明](#简体中文)

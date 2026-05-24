@@ -66,7 +66,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     color: var(--text-muted);
-    font-size: 18px;
+    font-size: 18px; /* 👈 移除了变量，改回 18px */
     line-height: 1.5;
 }
 
@@ -274,7 +274,7 @@
 
 .annotation-comment-text {
     flex: 1;
-    font-size: 16px;
+    font-size: 16px; /* 👈 移除了变量，改回 16px */
     line-height: 1.4;
     color: var(--text-muted);
     user-select: none;
@@ -542,7 +542,7 @@
 .anno-title-text {
     display: none;
     font-size: 18px;
-    color: var(--text-normal);
+    color: var(--text-normal) !important;
     padding: 2px 0;
     white-space: nowrap;
     overflow: hidden;
@@ -852,4 +852,11 @@ button.db-btn-relink {
 button.db-btn-relink:hover {
     background-color: var(--interactive-accent-hover) !important;
     opacity: 0.9 !important;
+}
+
+/* =========================================
+   动态设置：选区闪烁颜色 (.is-flashing)
+   ========================================= */
+.is-flashing {
+    background-color: var(--fc-flashing-color, #EEE7DD) !important;
 }

@@ -29,6 +29,17 @@ var VIEW_TYPE_FOOTNOTE = "footnote-compass-view";
 function generateUUID() {
   return typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substring(2);
 }
+function normalizeTo7CharHex(hex) {
+  hex = hex.trim();
+  if (!hex.startsWith("#")) hex = "#" + hex;
+  if (/^#([0-9A-Fa-f]{3})$/i.test(hex)) {
+    return "#" + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
+  }
+  if (/^#([0-9A-Fa-f]{6})$/i.test(hex)) {
+    return hex;
+  }
+  return null;
+}
 function hexToRgba(hex, alpha) {
   if (!/^#([0-9A-Fa-f]{3}){1,2}$/.test(hex)) return hex;
   let c = hex.substring(1).split("");
@@ -592,7 +603,7 @@ var FootnoteListView = class extends import_obsidian.ItemView {
       const filePath = this.lastActiveView?.file?.path;
       if (filePath && this.plugin.annoManager.data[filePath]?.length > 0) {
         const headerContainer = fragment.createDiv({ cls: "annotation-section-header" });
-        headerContainer.createDiv({ cls: "annotation-divider", text: "\u{1F4CC} \u6587\u672C\u53D8\u4F53\u6807\u6CE8" });
+        headerContainer.createDiv({ cls: "annotation-divider", text: "\u{1F4CC} \u6807\u6CE8" });
         const rightControls = headerContainer.createDiv({
           attr: { style: "display: flex; align-items: center; gap: 4px;" }
         });
@@ -736,8 +747,8 @@ var FootnoteListView = class extends import_obsidian.ItemView {
               card.classList.remove("is-context-active");
             });
             menu.addItem((item) => {
-              item.setTitle("\u6DFB\u52A0\u65B0\u53D8\u4F53").setIcon("list-plus").onClick(() => {
-                new CommentModal(this.app, "\u6DFB\u52A0\u65B0\u53D8\u4F53", "", async (text) => {
+              item.setTitle("\u6DFB\u52A0\u5206\u652F").setIcon("list-plus").onClick(() => {
+                new CommentModal(this.app, "\u6DFB\u52A0\u5206\u652F", "", async (text) => {
                   if (!anno.comments) anno.comments = [];
                   anno.comments.push({ id: generateUUID(), text, checked: false });
                   await this.plugin.annoManager.save();
@@ -748,7 +759,7 @@ var FootnoteListView = class extends import_obsidian.ItemView {
             });
             menu.addSeparator();
             menu.addItem((item) => {
-              item.setTitle("\u4FEE\u6539\u5F53\u524D\u6807\u6CE8\u989C\u8272").setIcon("highlighter").onClick(() => {
+              item.setTitle("\u4FEE\u6539\u6807\u6CE8\u989C\u8272").setIcon("highlighter").onClick(() => {
                 new ColorPickerModal(this.app, "\u9009\u62E9\u6807\u6CE8\u9AD8\u4EAE\u989C\u8272", palette, async (c) => {
                   if (c) {
                     anno.highlightColor = c;
@@ -763,8 +774,8 @@ var FootnoteListView = class extends import_obsidian.ItemView {
               });
             });
             menu.addItem((item) => {
-              item.setTitle("\u4FEE\u6539\u5F53\u524D\u53D8\u4F53\u989C\u8272").setIcon("paintbrush").onClick(() => {
-                new ColorPickerModal(this.app, "\u9009\u62E9\u66FF\u6362\u540E\u989C\u8272", palette, async (c) => {
+              item.setTitle("\u4FEE\u6539\u5206\u652F\u989C\u8272").setIcon("paintbrush").onClick(() => {
+                new ColorPickerModal(this.app, "\u9009\u62E9\u5206\u652F\u989C\u8272", palette, async (c) => {
                   if (c) {
                     anno.phantomColor = c;
                   } else {
@@ -1054,6 +1065,7 @@ var FootnoteCompassSettingTab = class extends import_obsidian.PluginSettingTab {
     this.createColorSetting(containerEl, "\u9ED8\u8BA4\u539F\u6587\u672C\u9AD8\u4EAE\u989C\u8272", "\u5F53\u521B\u5EFA\u65B0\u53D8\u4F53\u65F6\uFF0C\u6B63\u6587\u4E2D\u88AB\u5708\u5B9A\u7684\u539F\u8BCD\u9AD8\u4EAE\u989C\u8272\u3002", "defaultHighlightColor");
     this.createColorSetting(containerEl, "\u9ED8\u8BA4\u66FF\u6362\u540E\u53D8\u4F53\u989C\u8272", "\u5728\u6B63\u6587\u4E2D\u66FF\u6362\u6210\u53D8\u4F53\u6587\u5B57\u540E\u7684\u6587\u5B57\u548C\u8FB9\u6846\u989C\u8272\u3002", "defaultPhantomColor");
     this.createColorSetting(containerEl, "\u4FA7\u8FB9\u680F\u5206\u7C7B\u6807\u9898\u989C\u8272", "\u5728\u4FA7\u8FB9\u680F\u4E2D\u57FA\u4E8EH1-H6\u5206\u7C7B\u663E\u793A\u7684\u6807\u9898\u6587\u672C\u989C\u8272\u3002", "headingColor");
+    this.createColorSetting(containerEl, "\u9009\u533A\u80CC\u666F\u9AD8\u4EAE\u989C\u8272", "\u4FEE\u6539\u9009\u533A\u9AD8\u4EAE\u65F6\u7684\u80CC\u666F\u989C\u8272\uFF08\u5BF9\u5E94 .is-flashing \u7684\u80CC\u666F\u8272\uFF09\u3002", "flashingColor");
     const colorSection = containerEl.createDiv({ cls: "color-preset-section" });
     const headerDiv = colorSection.createDiv({ cls: "color-preset-header" });
     headerDiv.createEl("h3", { text: "\u989C\u8272\u9884\u8BBE\u7BA1\u7406" });
@@ -1076,12 +1088,23 @@ var FootnoteCompassSettingTab = class extends import_obsidian.PluginSettingTab {
         hexInput.value = preset.hex;
         await this.plugin.saveSettings();
       };
-      hexInput.onchange = async (e) => {
-        let val = e.target.value;
-        val = val.startsWith("#") ? val : "#" + val;
-        preset.hex = val;
-        colorPicker.value = val;
-        await this.plugin.saveSettings();
+      hexInput.oninput = async (e) => {
+        const val = e.target.value;
+        const validHex = normalizeTo7CharHex(val);
+        if (validHex) {
+          preset.hex = validHex;
+          colorPicker.value = validHex;
+          await this.plugin.saveSettings();
+        }
+      };
+      hexInput.onblur = (e) => {
+        const val = e.target.value;
+        const validHex = normalizeTo7CharHex(val);
+        if (validHex) {
+          hexInput.value = validHex;
+        } else {
+          hexInput.value = preset.hex;
+        }
       };
       const delBtn = item.createDiv({ cls: "color-preset-del" });
       (0, import_obsidian.setIcon)(delBtn, "trash");
@@ -1196,20 +1219,22 @@ var FootnoteCompassSettingTab = class extends import_obsidian.PluginSettingTab {
         this.plugin.settings[settingKey] = val;
         if (textComp) textComp.setValue(val);
         await this.plugin.saveSettings();
+        this.plugin.applyDynamicStyles();
         updateEditorDecorations(this.plugin);
         this.forceRefreshSidebar();
       });
     }).addText((text) => {
       textComp = text;
       text.setValue(this.plugin.settings[settingKey]).onChange(async (val) => {
-        val = val.trim().startsWith("#") ? val.trim() : "#" + val.trim();
-        this.plugin.settings[settingKey] = val;
-        if (/^#([0-9A-Fa-f]{3}){1,2}$/.test(val)) {
-          if (colorComp) colorComp.setValue(val);
+        const validHex = normalizeTo7CharHex(val);
+        if (validHex) {
+          this.plugin.settings[settingKey] = validHex;
+          if (colorComp) colorComp.setValue(validHex);
+          await this.plugin.saveSettings();
+          this.plugin.applyDynamicStyles();
           updateEditorDecorations(this.plugin);
+          this.forceRefreshSidebar();
         }
-        await this.plugin.saveSettings();
-        this.forceRefreshSidebar();
       });
       text.inputEl.classList.add("color-hex-input");
       text.inputEl.style.marginLeft = "8px";
@@ -1238,8 +1263,9 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
       headingFilters: {},
       displayModes: {},
       // ✨ 新增：默认值
-      headingColor: "#2196f3"
+      headingColor: "#2196f3",
       // 新增：默认标题颜色（蓝色）
+      flashingColor: "#EEE7DD"
     }, loadedData);
     this.annoManager = new AnnotationManager(this);
     this.addSettingTab(new FootnoteCompassSettingTab(this.app, this));
@@ -1342,6 +1368,7 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
       }
     }));
     this.applyBeautifyStyle();
+    this.applyDynamicStyles();
     this.app.workspace.onLayoutReady(async () => {
       await this.annoManager.load();
       debouncedOutlineUpdate();
@@ -1354,8 +1381,14 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
   applyBeautifyStyle() {
     document.body.classList.toggle("footnote-beautify-enabled", this.settings.beautifyEnabled);
   }
+  // 👇 修改：加入安全默认值，防止旧数据生成 "undefinedpx"
+  applyDynamicStyles() {
+    const flashColor = this.settings.flashingColor || "#EEE7DD";
+    document.body.style.setProperty("--fc-flashing-color", flashColor);
+  }
   async onunload() {
     document.body.classList.remove("footnote-beautify-enabled");
+    document.body.style.removeProperty("--fc-flashing-color");
     if (this.annoManager) {
       await this.annoManager.forceSave();
     }
