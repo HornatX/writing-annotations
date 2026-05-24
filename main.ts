@@ -30,6 +30,11 @@ export interface FootnoteCompassSettings {
     // 👇 新增以下三个字段
     flashingColor: string;     // 👈 新增：选区高亮颜色
 
+    // 👇 新增备份相关的三个字段
+    maxBackups: number;          // 最大备份份数 (5-50)
+    backupIntervalHours: number; // 备份间隔时间(小时)
+    lastBackupTime: number;
+
 }
 
 export interface AnnotationComment {
@@ -323,11 +328,8 @@ class AnnotationManager {
         const path = normalizePath(this.plugin.settings.annotationFilePath);
         let file = this.plugin.app.vault.getAbstractFileByPath(path);
 
-        // 🚀 修复：增加一个“过滤规则”，保存时主动扔掉 el 节点和临时 _temp 变量
         const jsonStr = JSON.stringify(this.data, (key, value) => {
-            if (key === 'el' || key === '_tempOffset' || key === '_exportOffset') {
-                return undefined; // 遇到这三个字段，不要保存进文件，直接跳过
-            }
+            if (key === 'el' || key === '_tempOffset' || key === '_exportOffset') return undefined;
             return value;
         }, 2);
 
@@ -339,26 +341,78 @@ class AnnotationManager {
                 await this.plugin.app.vault.process(file, (data) => {
                     const regexNew = /<!-- FC_DATA_START -->\r?\n```json\r?\n([\s\S]*?)\r?\n```\r?\n<!-- FC_DATA_END -->/;
                     const regexOld = /```json\r?\n([\s\S]*?)\r?\n```/;
-
                     if (data.match(regexNew)) return data.replace(regexNew, newBlock);
                     if (data.match(regexOld)) return data.replace(regexOld, newBlock);
-
-                    // ✅ 安全修复：如果找不到旧的数据块，千万不要用默认模板覆盖！
-                    // 而是把新的数据块“追加(Append)”到文件最末尾，保留用户原本写的所有内容。
-                    // 如果原文件完全为空，才使用带有提示语的 defaultContent。
-                    if (data.trim().length === 0) {
-                        return defaultContent;
-                    } else {
-                        // 使用 replace(/\s+$/, "") 剔除文件末尾的多余空行，兼容所有JS版本，消除红线
-                        return data.replace(/\s+$/, "") + "\n\n" + newBlock + "\n";
-                    }
+                    if (data.trim().length === 0) return defaultContent;
+                    else return data.replace(/\s+$/, "") + "\n\n" + newBlock + "\n";
                 });
-
             } else {
                 await this.plugin.app.vault.create(path, defaultContent);
             }
+
+            // 👇 每次成功写入后，呼叫备份引擎，检查是否需要备份！
+            await this._processBackup(defaultContent, newBlock, file instanceof TFile ? file : null);
+
         } catch (e) {
             console.error("保存标注数据失败:", e);
+        }
+    }
+
+    // ✨ 终极保命机制：静默滚动备份引擎
+    async _processBackup(defaultContent: string, newBlock: string, originalFile: TFile | null) {
+        const now = Date.now();
+        const intervalMs = this.plugin.settings.backupIntervalHours * 60 * 60 * 1000;
+
+        // 如果距离上次备份还没超过设定的冷却时间，直接退出，不备
+        if (now - this.plugin.settings.lastBackupTime < intervalMs) return;
+
+        try {
+            // 获取最新鲜的数据：如果原文件存在，读取它（包含用户的笔记），否则用默认模版
+            const fullContentToBackup = originalFile ? await this.plugin.app.vault.read(originalFile) : defaultContent;
+
+            // 插件配置底层的路径，极其安全，不会在用户的普通文件树里碍眼
+            const adapter = this.plugin.app.vault.adapter;
+            const backupDirPath = normalizePath(this.plugin.app.vault.configDir + "/plugins/footnote-compass/backups");
+
+            // 确保备份文件夹存在
+            if (!(await adapter.exists(backupDirPath))) {
+                await adapter.mkdir(backupDirPath);
+            }
+
+            // 生成带时间戳的文件名 (例如: 大纲备份_2026-05-24_17-30-15.md)
+            const dateObj = new Date();
+            const timeString = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}_${String(dateObj.getHours()).padStart(2, '0')}-${String(dateObj.getMinutes()).padStart(2, '0')}-${String(dateObj.getSeconds()).padStart(2, '0')}`;
+            const backupFileName = `${backupDirPath}/大纲备份_${timeString}.md`;
+
+            // 1. 写入最新的备份文件
+            await adapter.write(backupFileName, fullContentToBackup);
+
+            // 2. 刷新上次备份时间并保存设置
+            this.plugin.settings.lastBackupTime = now;
+            await this.plugin.saveSettings();
+
+            // 3. 执行垃圾回收：读取所有备份，超过最大份数就删掉最老的
+            const dirList = await adapter.list(backupDirPath);
+            const backupFiles = dirList.files.filter(f => f.endsWith(".md"));
+
+            if (backupFiles.length > this.plugin.settings.maxBackups) {
+                // 获取每个文件的详细信息(创建时间)，排序，找出最老的
+                const filesWithTime = await Promise.all(backupFiles.map(async f => {
+                    const stat = await adapter.stat(f);
+                    return { path: f, ctime: stat?.ctime || 0 };
+                }));
+                // 按时间从旧到新排序
+                filesWithTime.sort((a, b) => a.ctime - b.ctime);
+
+                // 算出需要删掉多少个多余的文件
+                const deleteCount = filesWithTime.length - this.plugin.settings.maxBackups;
+                for (let i = 0; i < deleteCount; i++) {
+                    await adapter.remove(filesWithTime[i].path);
+                }
+            }
+            console.log("✅ FootnoteCompass 自动备份成功执行！");
+        } catch (e) {
+            console.error("FootnoteCompass 自动备份失败:", e);
         }
     }
 
@@ -1508,6 +1562,72 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
             };
         });
 
+
+        // ==========================================
+        // ✨ 新增：保命机制 - 本地自动滚动备份设置
+        // ==========================================
+        containerEl.createEl("h3", { text: "🛡️ 数据安全与自动备份", cls: "setting-section-header" });
+        containerEl.createEl("p", {
+            text: "专为小说大纲等高价值数据设计的保命机制。插件会在后台静默记录您的历史版本，以防误删或同步盘引发的文件损坏。",
+            cls: "setting-item-description"
+        });
+
+        new Setting(containerEl)
+            .setName("自动备份冷却时间 (小时)")
+            .setDesc("当您有修改发生时，至少间隔多少小时才生成一份新备份。(建议: 1-2小时)")
+            .addSlider(slider => slider
+                .setLimits(1, 24, 1)
+                .setValue(this.plugin.settings.backupIntervalHours)
+                .setDynamicTooltip()
+                .onChange(async (val) => {
+                    this.plugin.settings.backupIntervalHours = val;
+                    await this.plugin.saveSettings();
+                })
+            );
+
+        new Setting(containerEl)
+            .setName("最多保留历史份数")
+            .setDesc("超过此份数时，将自动删除最老的一份备份。(范围: 5 ~ 50份)")
+            .addSlider(slider => slider
+                .setLimits(5, 50, 1)
+                .setValue(this.plugin.settings.maxBackups)
+                .setDynamicTooltip()
+                .onChange(async (val) => {
+                    this.plugin.settings.maxBackups = val;
+                    await this.plugin.saveSettings();
+                })
+            );
+
+        new Setting(containerEl)
+            .setName("急救：查看备份文件")
+            .setDesc("🚨 如果您的标注数据意外丢失，点击右侧按钮立刻打开备份存放的系统文件夹进行抢救。")
+            .addButton(btn => btn
+                .setButtonText("📂 打开备份文件夹")
+                .setCta()
+                .onClick(async () => {
+                    const backupDirPath = normalizePath(this.plugin.app.vault.configDir + "/plugins/footnote-compass/backups");
+                    const adapter = this.plugin.app.vault.adapter as any;
+
+                    // 确保文件夹存在，免得报错
+                    if (!(await adapter.exists(backupDirPath))) {
+                        await adapter.mkdir(backupDirPath);
+                    }
+
+                    // 🚨 核心修复：先安全判断是不是在电脑端（手机端没有 getBasePath 函数）
+                    if (typeof adapter.getBasePath === 'function') {
+                        const fullSystemPath = adapter.getBasePath() + "/" + backupDirPath;
+                        // 利用 Electron 接口直接在 Windows/Mac 唤起文件管理器
+                        if (typeof window !== "undefined" && (window as any).require) {
+                            (window as any).require('electron').shell.openPath(fullSystemPath);
+                            return;
+                        }
+                    }
+
+                    // 如果是手机/平板，或者不支持直接打开，则安全弹出路径提示
+                    new Notice("📱 移动端不支持直接打开系统文件夹，备份已安全存放在此路径: \n" + backupDirPath, 8000);
+                })
+            );
+
         // 打断 Obsidian 的自动聚焦施法
         setTimeout(() => {
             const firstInput = containerEl.querySelector('input[type="text"]') as HTMLElement;
@@ -1568,6 +1688,10 @@ export default class FootnoteCompassPlugin extends Plugin {
             displayModes: {}, // ✨ 新增：默认值
             headingColor: "#2196f3", // 新增：默认标题颜色（蓝色）
             flashingColor: "#EEE7DD",
+
+            maxBackups: 20,           // 默认保存 20 份
+            backupIntervalHours: 1,   // 默认 1 小时冷却时间
+            lastBackupTime: 0         // 初始时间为 0
         }, loadedData);
 
         this.annoManager = new AnnotationManager(this);
@@ -1679,6 +1803,12 @@ export default class FootnoteCompassPlugin extends Plugin {
                             return;
                         }
 
+                        // 🚨 核心修复：如果是白板或者无文件视图，强行拦截，防止崩溃！
+                        if (!view || !view.file) {
+                            new Notice("⚠️ 无法在此处添加标注：当前文档不存在对应的物理文件。");
+                            return;
+                        }
+
                         // 👇 修复：检查是否跨行选择
                         const cursorFrom = editor.getCursor('from');
                         const cursorTo = editor.getCursor('to');
@@ -1691,7 +1821,9 @@ export default class FootnoteCompassPlugin extends Plugin {
                         // 安全截取前后文
                         const prefix = lineText.substring(Math.max(0, cursorFrom.ch - 30), cursorFrom.ch);
                         const suffix = lineText.substring(cursorTo.ch, Math.min(lineText.length, cursorTo.ch + 30));
-                        const path = view.file!.path;
+
+                        // 🚨 去掉了原先危险的感叹号
+                        const path = view.file.path;
 
                         const expectedOffset = editor.posToOffset(cursorFrom);
 

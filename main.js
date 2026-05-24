@@ -236,9 +236,7 @@ var AnnotationManager = class {
     const path = (0, import_obsidian.normalizePath)(this.plugin.settings.annotationFilePath);
     let file = this.plugin.app.vault.getAbstractFileByPath(path);
     const jsonStr = JSON.stringify(this.data, (key, value) => {
-      if (key === "el" || key === "_tempOffset" || key === "_exportOffset") {
-        return void 0;
-      }
+      if (key === "el" || key === "_tempOffset" || key === "_exportOffset") return void 0;
       return value;
     }, 2);
     const newBlock = `<!-- FC_DATA_START -->
@@ -258,17 +256,51 @@ ${newBlock}
           const regexOld = /```json\r?\n([\s\S]*?)\r?\n```/;
           if (data.match(regexNew)) return data.replace(regexNew, newBlock);
           if (data.match(regexOld)) return data.replace(regexOld, newBlock);
-          if (data.trim().length === 0) {
-            return defaultContent;
-          } else {
-            return data.replace(/\s+$/, "") + "\n\n" + newBlock + "\n";
-          }
+          if (data.trim().length === 0) return defaultContent;
+          else return data.replace(/\s+$/, "") + "\n\n" + newBlock + "\n";
         });
       } else {
         await this.plugin.app.vault.create(path, defaultContent);
       }
+      await this._processBackup(defaultContent, newBlock, file instanceof import_obsidian.TFile ? file : null);
     } catch (e) {
       console.error("\u4FDD\u5B58\u6807\u6CE8\u6570\u636E\u5931\u8D25:", e);
+    }
+  }
+  // ✨ 终极保命机制：静默滚动备份引擎
+  async _processBackup(defaultContent, newBlock, originalFile) {
+    const now = Date.now();
+    const intervalMs = this.plugin.settings.backupIntervalHours * 60 * 60 * 1e3;
+    if (now - this.plugin.settings.lastBackupTime < intervalMs) return;
+    try {
+      const fullContentToBackup = originalFile ? await this.plugin.app.vault.read(originalFile) : defaultContent;
+      const adapter = this.plugin.app.vault.adapter;
+      const backupDirPath = (0, import_obsidian.normalizePath)(this.plugin.app.vault.configDir + "/plugins/footnote-compass/backups");
+      if (!await adapter.exists(backupDirPath)) {
+        await adapter.mkdir(backupDirPath);
+      }
+      const dateObj = /* @__PURE__ */ new Date();
+      const timeString = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}-${String(dateObj.getDate()).padStart(2, "0")}_${String(dateObj.getHours()).padStart(2, "0")}-${String(dateObj.getMinutes()).padStart(2, "0")}-${String(dateObj.getSeconds()).padStart(2, "0")}`;
+      const backupFileName = `${backupDirPath}/\u5927\u7EB2\u5907\u4EFD_${timeString}.md`;
+      await adapter.write(backupFileName, fullContentToBackup);
+      this.plugin.settings.lastBackupTime = now;
+      await this.plugin.saveSettings();
+      const dirList = await adapter.list(backupDirPath);
+      const backupFiles = dirList.files.filter((f) => f.endsWith(".md"));
+      if (backupFiles.length > this.plugin.settings.maxBackups) {
+        const filesWithTime = await Promise.all(backupFiles.map(async (f) => {
+          const stat = await adapter.stat(f);
+          return { path: f, ctime: stat?.ctime || 0 };
+        }));
+        filesWithTime.sort((a, b) => a.ctime - b.ctime);
+        const deleteCount = filesWithTime.length - this.plugin.settings.maxBackups;
+        for (let i = 0; i < deleteCount; i++) {
+          await adapter.remove(filesWithTime[i].path);
+        }
+      }
+      console.log("\u2705 FootnoteCompass \u81EA\u52A8\u5907\u4EFD\u6210\u529F\u6267\u884C\uFF01");
+    } catch (e) {
+      console.error("FootnoteCompass \u81EA\u52A8\u5907\u4EFD\u5931\u8D25:", e);
     }
   }
   async forceSave() {
@@ -1247,6 +1279,40 @@ var FootnoteCompassSettingTab = class extends import_obsidian.PluginSettingTab {
         }).open();
       };
     });
+    containerEl.createEl("h3", { text: "\u{1F6E1}\uFE0F \u6570\u636E\u5B89\u5168\u4E0E\u81EA\u52A8\u5907\u4EFD", cls: "setting-section-header" });
+    containerEl.createEl("p", {
+      text: "\u4E13\u4E3A\u5C0F\u8BF4\u5927\u7EB2\u7B49\u9AD8\u4EF7\u503C\u6570\u636E\u8BBE\u8BA1\u7684\u4FDD\u547D\u673A\u5236\u3002\u63D2\u4EF6\u4F1A\u5728\u540E\u53F0\u9759\u9ED8\u8BB0\u5F55\u60A8\u7684\u5386\u53F2\u7248\u672C\uFF0C\u4EE5\u9632\u8BEF\u5220\u6216\u540C\u6B65\u76D8\u5F15\u53D1\u7684\u6587\u4EF6\u635F\u574F\u3002",
+      cls: "setting-item-description"
+    });
+    new import_obsidian.Setting(containerEl).setName("\u81EA\u52A8\u5907\u4EFD\u51B7\u5374\u65F6\u95F4 (\u5C0F\u65F6)").setDesc("\u5F53\u60A8\u6709\u4FEE\u6539\u53D1\u751F\u65F6\uFF0C\u81F3\u5C11\u95F4\u9694\u591A\u5C11\u5C0F\u65F6\u624D\u751F\u6210\u4E00\u4EFD\u65B0\u5907\u4EFD\u3002(\u5EFA\u8BAE: 1-2\u5C0F\u65F6)").addSlider(
+      (slider) => slider.setLimits(1, 24, 1).setValue(this.plugin.settings.backupIntervalHours).setDynamicTooltip().onChange(async (val) => {
+        this.plugin.settings.backupIntervalHours = val;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("\u6700\u591A\u4FDD\u7559\u5386\u53F2\u4EFD\u6570").setDesc("\u8D85\u8FC7\u6B64\u4EFD\u6570\u65F6\uFF0C\u5C06\u81EA\u52A8\u5220\u9664\u6700\u8001\u7684\u4E00\u4EFD\u5907\u4EFD\u3002(\u8303\u56F4: 5 ~ 50\u4EFD)").addSlider(
+      (slider) => slider.setLimits(5, 50, 1).setValue(this.plugin.settings.maxBackups).setDynamicTooltip().onChange(async (val) => {
+        this.plugin.settings.maxBackups = val;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian.Setting(containerEl).setName("\u6025\u6551\uFF1A\u67E5\u770B\u5907\u4EFD\u6587\u4EF6").setDesc("\u{1F6A8} \u5982\u679C\u60A8\u7684\u6807\u6CE8\u6570\u636E\u610F\u5916\u4E22\u5931\uFF0C\u70B9\u51FB\u53F3\u4FA7\u6309\u94AE\u7ACB\u523B\u6253\u5F00\u5907\u4EFD\u5B58\u653E\u7684\u7CFB\u7EDF\u6587\u4EF6\u5939\u8FDB\u884C\u62A2\u6551\u3002").addButton(
+      (btn) => btn.setButtonText("\u{1F4C2} \u6253\u5F00\u5907\u4EFD\u6587\u4EF6\u5939").setCta().onClick(async () => {
+        const backupDirPath = (0, import_obsidian.normalizePath)(this.plugin.app.vault.configDir + "/plugins/footnote-compass/backups");
+        const adapter = this.plugin.app.vault.adapter;
+        if (!await adapter.exists(backupDirPath)) {
+          await adapter.mkdir(backupDirPath);
+        }
+        if (typeof adapter.getBasePath === "function") {
+          const fullSystemPath = adapter.getBasePath() + "/" + backupDirPath;
+          if (typeof window !== "undefined" && window.require) {
+            window.require("electron").shell.openPath(fullSystemPath);
+            return;
+          }
+        }
+        new import_obsidian.Notice("\u{1F4F1} \u79FB\u52A8\u7AEF\u4E0D\u652F\u6301\u76F4\u63A5\u6253\u5F00\u7CFB\u7EDF\u6587\u4EF6\u5939\uFF0C\u5907\u4EFD\u5DF2\u5B89\u5168\u5B58\u653E\u5728\u6B64\u8DEF\u5F84: \n" + backupDirPath, 8e3);
+      })
+    );
     setTimeout(() => {
       const firstInput = containerEl.querySelector('input[type="text"]');
       if (firstInput && document.activeElement === firstInput) {
@@ -1308,7 +1374,13 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
       // ✨ 新增：默认值
       headingColor: "#2196f3",
       // 新增：默认标题颜色（蓝色）
-      flashingColor: "#EEE7DD"
+      flashingColor: "#EEE7DD",
+      maxBackups: 20,
+      // 默认保存 20 份
+      backupIntervalHours: 1,
+      // 默认 1 小时冷却时间
+      lastBackupTime: 0
+      // 初始时间为 0
     }, loadedData);
     this.annoManager = new AnnotationManager(this);
     this.addSettingTab(new FootnoteCompassSettingTab(this.app, this));
@@ -1391,6 +1463,10 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
             const selectedText = editor.getSelection();
             if (!selectedText || selectedText.trim().length === 0) {
               new import_obsidian.Notice("\u65E0\u6CD5\u5BF9\u7A7A\u5B57\u7B26\u6DFB\u52A0\u6807\u6CE8\uFF01");
+              return;
+            }
+            if (!view || !view.file) {
+              new import_obsidian.Notice("\u26A0\uFE0F \u65E0\u6CD5\u5728\u6B64\u5904\u6DFB\u52A0\u6807\u6CE8\uFF1A\u5F53\u524D\u6587\u6863\u4E0D\u5B58\u5728\u5BF9\u5E94\u7684\u7269\u7406\u6587\u4EF6\u3002");
               return;
             }
             const cursorFrom = editor.getCursor("from");
