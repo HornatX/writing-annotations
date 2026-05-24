@@ -1,7 +1,7 @@
 /* main.ts - Footnote & Hover Note Compass (TypeScript 重构完整版) */
 import {
     App, Plugin, ItemView, debounce, setIcon, Menu, Modal, Setting,
-    PluginSettingTab, TFile, Notice, AbstractInputSuggest, normalizePath,
+    PluginSettingTab, TFile, TFolder, Notice, AbstractInputSuggest, normalizePath, // 👈 增加了 TFolder
     WorkspaceLeaf, MarkdownView
 } from 'obsidian';
 import { RangeSetBuilder, StateField, StateEffect, Transaction } from "@codemirror/state";
@@ -76,14 +76,13 @@ function hexToRgba(hex: string, alpha: number): string {
     return `rgba(${[(c >> 16) & 255, (c >> 8) & 255, c & 255].join(',')}, ${alpha})`;
 }
 
-// --- 核心算法：带预期偏移量的自愈搜索 (防死循环保护版) ---
+// --- 核心算法：带预期偏移量的自愈搜索 (安全无损版) ---
 function findAnnotationOffsetAndHeal(text: string, anno: Annotation): { start: number, end: number } | null {
     const prefix = anno.prefix || "";
     const suffix = anno.suffix || "";
     const original = anno.original || "";
     const expected = anno.expectedOffset || 0;
 
-    // 🚨 绝对防御：防止空字符串导致 while 陷入死循环卡死整个 UI
     if (!original || original.length === 0) return null;
 
     const exactTarget = prefix + original + suffix;
@@ -101,6 +100,7 @@ function findAnnotationOffsetAndHeal(text: string, anno: Annotation): { start: n
     }
 
     if (bestExact !== -1) {
+        // 更新正确的偏移量
         anno.expectedOffset = bestExact + prefix.length;
         return { start: anno.expectedOffset, end: anno.expectedOffset + original.length };
     }
@@ -116,14 +116,14 @@ function findAnnotationOffsetAndHeal(text: string, anno: Annotation): { start: n
     }
 
     if (bestFallback !== -1) {
-        // ✨ 自愈：更新前缀和后缀，以便下次精准定位
-        anno.prefix = text.substring(Math.max(0, bestFallback - 10), bestFallback);
-        anno.suffix = text.substring(bestFallback + original.length, bestFallback + original.length + 10);
+        // 🚨 致命修复：绝对不能在这里覆盖 anno.prefix 和 anno.suffix！
+        // 即使暂时找错了（比如用户把那段话剪切到了剪贴板还没粘贴回来），
+        // 只要 prefix 和 suffix 还在数据库里，下次刷新就能找回正确位置。
         anno.expectedOffset = bestFallback;
         return { start: bestFallback, end: bestFallback + original.length };
     }
 
-    return null; // 彻底丢失
+    return null;
 }
 
 // --- UI：文件搜索提示框 ---
@@ -864,8 +864,9 @@ class FootnoteListView extends ItemView {
                                 const cursor = editor.getCursor('from');
                                 const lineText = editor.getLine(cursor.line);
                                 anno.original = selectedText;
-                                anno.prefix = lineText.substring(Math.max(0, cursor.ch - 10), cursor.ch);
-                                anno.suffix = lineText.substring(cursor.ch + selectedText.length, cursor.ch + selectedText.length + 10);
+                                // ✨ 同步修复重新选择文本的上下文长度
+                                anno.prefix = lineText.substring(Math.max(0, cursor.ch - 30), cursor.ch);
+                                anno.suffix = lineText.substring(cursor.ch + selectedText.length, cursor.ch + selectedText.length + 30);
                                 anno.expectedOffset = editor.posToOffset(cursor);
                                 await this.plugin.annoManager.save();
                                 updateEditorDecorations(this.plugin);
@@ -1152,15 +1153,15 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
                     .onChange(async (value) => {
                         // ✨ 核心修复：如果用户清空输入框 (value 为空)，底层安全回退到中文默认文件名，而不是 Annotations.md
                         this.plugin.settings.annotationFilePath = value.trim() || DEFAULT_FILE;
-                        await this.plugin.saveSettings(); 
+                        await this.plugin.saveSettings();
                         await this.plugin.annoManager.load();
                     });
-                
+
                 new FileSuggest(this.app, text, async (selectedPath) => {
                     this.plugin.settings.annotationFilePath = selectedPath;
                     // 使用下拉建议选中后，如果碰巧选的是默认文件，也保持输入框清爽
                     text.setValue(selectedPath === DEFAULT_FILE ? "" : selectedPath);
-                    await this.plugin.saveSettings(); 
+                    await this.plugin.saveSettings();
                     await this.plugin.annoManager.load();
                 });
             });
@@ -1286,11 +1287,71 @@ export default class FootnoteCompassPlugin extends Plugin {
         // 5. 只有正文打字修改时，才使用 0.5秒的慢速刷新
         this.registerEvent(this.app.workspace.on('editor-change', debouncedOutlineUpdate));
 
+        // --- 替换原有的 rename 监听逻辑 ---
         this.registerEvent(this.app.vault.on('rename', async (file, oldPath) => {
-            if (file instanceof TFile && file.extension === 'md' && this.annoManager.data[oldPath]) {
-                this.annoManager.data[file.path] = this.annoManager.data[oldPath];
-                delete this.annoManager.data[oldPath];
-                await this.annoManager.save(); debouncedOutlineUpdate();
+            let hasChanges = false;
+
+            // 1. 如果移动/重命名的是【单个文件】
+            if (file instanceof TFile && file.extension === 'md') {
+                // 转移标注数据
+                if (this.annoManager.data[oldPath]) {
+                    this.annoManager.data[file.path] = this.annoManager.data[oldPath];
+                    delete this.annoManager.data[oldPath];
+                    hasChanges = true;
+                }
+                // 转移该文件的“标题过滤偏好”
+                if (this.settings.headingFilters[oldPath]) {
+                    this.settings.headingFilters[file.path] = this.settings.headingFilters[oldPath];
+                    delete this.settings.headingFilters[oldPath];
+                    hasChanges = true;
+                }
+                // 转移该文件的“显示模式偏好”
+                if (this.settings.displayModes[oldPath]) {
+                    this.settings.displayModes[file.path] = this.settings.displayModes[oldPath];
+                    delete this.settings.displayModes[oldPath];
+                    hasChanges = true;
+                }
+            }
+            // 2. 🚨修复核心：如果移动/重命名的是【文件夹】
+            else if (file instanceof TFolder) {
+                const oldPrefix = oldPath + "/";
+                const newPrefix = file.path + "/";
+
+                // 批量转移该文件夹下所有【标注数据】
+                Object.keys(this.annoManager.data).forEach(key => {
+                    if (key.startsWith(oldPrefix)) {
+                        const newKey = key.replace(oldPrefix, newPrefix);
+                        this.annoManager.data[newKey] = this.annoManager.data[key];
+                        delete this.annoManager.data[key];
+                        hasChanges = true;
+                    }
+                });
+
+                // 批量转移该文件夹下所有文件的【偏好设置】
+                Object.keys(this.settings.headingFilters).forEach(key => {
+                    if (key.startsWith(oldPrefix)) {
+                        const newKey = key.replace(oldPrefix, newPrefix);
+                        this.settings.headingFilters[newKey] = this.settings.headingFilters[key];
+                        delete this.settings.headingFilters[key];
+                        hasChanges = true;
+                    }
+                });
+
+                Object.keys(this.settings.displayModes).forEach(key => {
+                    if (key.startsWith(oldPrefix)) {
+                        const newKey = key.replace(oldPrefix, newPrefix);
+                        this.settings.displayModes[newKey] = this.settings.displayModes[key];
+                        delete this.settings.displayModes[key];
+                        hasChanges = true;
+                    }
+                });
+            }
+
+            // 如果有任何变更，统一保存数据并强制刷新UI
+            if (hasChanges) {
+                await this.annoManager.save();
+                await this.saveSettings();
+                debouncedOutlineUpdate();
             }
         }));
 
@@ -1305,8 +1366,9 @@ export default class FootnoteCompassPlugin extends Plugin {
                         }
                         const cursor = editor.getCursor('from');
                         const lineText = editor.getLine(cursor.line);
-                        const prefix = lineText.substring(Math.max(0, cursor.ch - 10), cursor.ch);
-                        const suffix = lineText.substring(cursor.ch + selectedText.length, cursor.ch + selectedText.length + 10);
+                        // ✨ 修复：将前后文抓取长度从 10 提升到 30，确保上下文在全文中的绝对唯一性
+                        const prefix = lineText.substring(Math.max(0, cursor.ch - 30), cursor.ch);
+                        const suffix = lineText.substring(cursor.ch + selectedText.length, cursor.ch + selectedText.length + 30);
                         const path = view.file!.path;
 
                         const expectedOffset = editor.posToOffset(cursor);

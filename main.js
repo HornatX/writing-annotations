@@ -72,8 +72,6 @@ function findAnnotationOffsetAndHeal(text, anno) {
     fbIdx = text.indexOf(original, fbIdx + 1);
   }
   if (bestFallback !== -1) {
-    anno.prefix = text.substring(Math.max(0, bestFallback - 10), bestFallback);
-    anno.suffix = text.substring(bestFallback + original.length, bestFallback + original.length + 10);
     anno.expectedOffset = bestFallback;
     return { start: bestFallback, end: bestFallback + original.length };
   }
@@ -734,8 +732,8 @@ var FootnoteListView = class extends import_obsidian.ItemView {
                 const cursor = editor.getCursor("from");
                 const lineText = editor.getLine(cursor.line);
                 anno.original = selectedText;
-                anno.prefix = lineText.substring(Math.max(0, cursor.ch - 10), cursor.ch);
-                anno.suffix = lineText.substring(cursor.ch + selectedText.length, cursor.ch + selectedText.length + 10);
+                anno.prefix = lineText.substring(Math.max(0, cursor.ch - 30), cursor.ch);
+                anno.suffix = lineText.substring(cursor.ch + selectedText.length, cursor.ch + selectedText.length + 30);
                 anno.expectedOffset = editor.posToOffset(cursor);
                 await this.plugin.annoManager.save();
                 updateEditorDecorations(this.plugin);
@@ -1111,10 +1109,54 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
     }));
     this.registerEvent(this.app.workspace.on("editor-change", debouncedOutlineUpdate));
     this.registerEvent(this.app.vault.on("rename", async (file, oldPath) => {
-      if (file instanceof import_obsidian.TFile && file.extension === "md" && this.annoManager.data[oldPath]) {
-        this.annoManager.data[file.path] = this.annoManager.data[oldPath];
-        delete this.annoManager.data[oldPath];
+      let hasChanges = false;
+      if (file instanceof import_obsidian.TFile && file.extension === "md") {
+        if (this.annoManager.data[oldPath]) {
+          this.annoManager.data[file.path] = this.annoManager.data[oldPath];
+          delete this.annoManager.data[oldPath];
+          hasChanges = true;
+        }
+        if (this.settings.headingFilters[oldPath]) {
+          this.settings.headingFilters[file.path] = this.settings.headingFilters[oldPath];
+          delete this.settings.headingFilters[oldPath];
+          hasChanges = true;
+        }
+        if (this.settings.displayModes[oldPath]) {
+          this.settings.displayModes[file.path] = this.settings.displayModes[oldPath];
+          delete this.settings.displayModes[oldPath];
+          hasChanges = true;
+        }
+      } else if (file instanceof import_obsidian.TFolder) {
+        const oldPrefix = oldPath + "/";
+        const newPrefix = file.path + "/";
+        Object.keys(this.annoManager.data).forEach((key) => {
+          if (key.startsWith(oldPrefix)) {
+            const newKey = key.replace(oldPrefix, newPrefix);
+            this.annoManager.data[newKey] = this.annoManager.data[key];
+            delete this.annoManager.data[key];
+            hasChanges = true;
+          }
+        });
+        Object.keys(this.settings.headingFilters).forEach((key) => {
+          if (key.startsWith(oldPrefix)) {
+            const newKey = key.replace(oldPrefix, newPrefix);
+            this.settings.headingFilters[newKey] = this.settings.headingFilters[key];
+            delete this.settings.headingFilters[key];
+            hasChanges = true;
+          }
+        });
+        Object.keys(this.settings.displayModes).forEach((key) => {
+          if (key.startsWith(oldPrefix)) {
+            const newKey = key.replace(oldPrefix, newPrefix);
+            this.settings.displayModes[newKey] = this.settings.displayModes[key];
+            delete this.settings.displayModes[key];
+            hasChanges = true;
+          }
+        });
+      }
+      if (hasChanges) {
         await this.annoManager.save();
+        await this.saveSettings();
         debouncedOutlineUpdate();
       }
     }));
@@ -1129,8 +1171,8 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
             }
             const cursor = editor.getCursor("from");
             const lineText = editor.getLine(cursor.line);
-            const prefix = lineText.substring(Math.max(0, cursor.ch - 10), cursor.ch);
-            const suffix = lineText.substring(cursor.ch + selectedText.length, cursor.ch + selectedText.length + 10);
+            const prefix = lineText.substring(Math.max(0, cursor.ch - 30), cursor.ch);
+            const suffix = lineText.substring(cursor.ch + selectedText.length, cursor.ch + selectedText.length + 30);
             const path = view.file.path;
             const expectedOffset = editor.posToOffset(cursor);
             if (!this.annoManager.data[path]) this.annoManager.data[path] = [];
