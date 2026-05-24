@@ -252,15 +252,23 @@ function createAnnotationDecorations(view: EditorView, annotations: Annotation[]
 
 function updateEditorDecorations(plugin: FootnoteCompassPlugin) {
     plugin.app.workspace.iterateAllLeaves(leaf => {
-        if (leaf.view?.getViewType() === 'markdown') {
-            const mdView = leaf.view as MarkdownView;
-            // 通过 any 绕过官方未暴露的 cm 属性
-            const cm = (mdView.editor as any).cm as EditorView;
-            if (cm && mdView.file) {
-                const annos = plugin.annoManager.data[mdView.file.path] || [];
-                const decos = createAnnotationDecorations(cm, annos, plugin);
-                cm.dispatch({ effects: AnnotationStateEffect.of(decos) });
+        try {
+            if (leaf.view?.getViewType() === 'markdown') {
+                const mdView = leaf.view as MarkdownView;
+                // ✨ 修复 1：如果是在阅读模式下 (无编辑器)，直接跳过，防止底层抛出异常
+                if (!mdView.editor) return; 
+
+                // 通过 any 绕过官方未暴露的 cm 属性
+                const cm = (mdView.editor as any).cm as EditorView;
+                if (cm && mdView.file) {
+                    const annos = plugin.annoManager.data[mdView.file.path] || [];
+                    const decos = createAnnotationDecorations(cm, annos, plugin);
+                    cm.dispatch({ effects: AnnotationStateEffect.of(decos) });
+                }
             }
+        } catch (e) {
+            // ✨ 修复 2：即使出错，也静默拦截，绝对不能打断后续的 UI 刷新
+            console.warn("FootnoteCompass 装饰器更新拦截异常:", e);
         }
     });
 }
@@ -1356,8 +1364,15 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
         }
 
         activeKeys.forEach(key => {
+            const arr = this.plugin.annoManager.data[key];
+            // ✨ 修复 3：静默清理由于之前双击导致的损坏空数据
+            if (!arr) {
+                delete this.plugin.annoManager.data[key];
+                return;
+            }
+
             const isExist = this.app.vault.getAbstractFileByPath(key) != null;
-            const count = this.plugin.annoManager.data[key].length;
+            const count = arr.length;
 
             if (count === 0) {
                 delete this.plugin.annoManager.data[key];
@@ -1383,6 +1398,9 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
 
             const trashBtn = actionCol.createEl("button", { text: "移至回收区", cls: "db-btn-trash" });
             trashBtn.onclick = async () => {
+                // ✨ 修复 4：防双击机制，点过一次后如果数据已空直接返回
+                if (!this.plugin.annoManager.data[key]) return; 
+
                 this.plugin.annoManager.data[`${TRASH_PREFIX}${key}`] = this.plugin.annoManager.data[key];
                 delete this.plugin.annoManager.data[key];
                 await this.plugin.annoManager.save();
@@ -1399,7 +1417,6 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
         if (trashKeys.length > 0) {
             const emptyTrashBtn = trashHeader.createEl("button", { text: "清空回收站", cls: "db-btn-trash" });
             emptyTrashBtn.onclick = () => {
-                // ✨ 带有 Obsidian 原生二次确认的清空回收站
                 new ConfirmModal(this.app, "清空回收站", "警告：彻底清空后，回收站内的所有数据将从 Markdown 数据库中完全抹除，无法恢复！确认清空吗？", async () => {
                     trashKeys.forEach(k => delete this.plugin.annoManager.data[k]);
                     await this.plugin.annoManager.save();
@@ -1415,8 +1432,15 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
         }
 
         trashKeys.forEach(key => {
+            const arr = this.plugin.annoManager.data[key];
+            // ✨ 修复 3：同样静默清理由于之前双击导致的损坏空数据
+            if (!arr) {
+                delete this.plugin.annoManager.data[key];
+                return;
+            }
+
             const originalPath = key.replace(TRASH_PREFIX, "");
-            const count = this.plugin.annoManager.data[key].length;
+            const count = arr.length;
             const row = trashTable.createDiv({ cls: "db-row db-row-trashed" });
 
             row.createDiv({ text: "已废弃", cls: "db-col db-col-status" });
@@ -1427,6 +1451,8 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
 
             const restoreBtn = actionCol.createEl("button", { text: "反悔恢复", cls: "db-btn-restore" });
             restoreBtn.onclick = async () => {
+                if (!this.plugin.annoManager.data[key]) return; // 防双击
+                
                 this.plugin.annoManager.data[originalPath] = this.plugin.annoManager.data[key];
                 delete this.plugin.annoManager.data[key];
                 await this.plugin.annoManager.save();
@@ -1438,7 +1464,6 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
 
             const delBtn = actionCol.createEl("button", { text: "彻底删除", cls: "db-btn-trash" });
             delBtn.onclick = () => {
-                // ✨ 新增：针对单条彻底删除的 Obsidian 原生二次确认
                 new ConfirmModal(this.app, "彻底删除单条记录", `确定要彻底删除文件【${originalPath}】的全部标注记录吗？此操作不可恢复！`, async () => {
                     delete this.plugin.annoManager.data[key];
                     await this.plugin.annoManager.save();
@@ -1448,14 +1473,13 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
             };
         });
 
-        // 👇👇👇 新增这段代码：打断 Obsidian 的自动聚焦施法 👇👇👇
+        // 打断 Obsidian 的自动聚焦施法
         setTimeout(() => {
             const firstInput = containerEl.querySelector('input[type="text"]') as HTMLElement;
             if (firstInput && document.activeElement === firstInput) {
-                firstInput.blur(); // 强制失去焦点
+                firstInput.blur(); 
             }
         }, 50);
-        // 👆👆👆 新增结束 👆👆👆
     }
 
 createColorSetting(containerEl: HTMLElement, name: string, desc: string, settingKey: keyof FootnoteCompassSettings) {

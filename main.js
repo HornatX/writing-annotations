@@ -181,14 +181,19 @@ function createAnnotationDecorations(view, annotations, plugin) {
 }
 function updateEditorDecorations(plugin) {
   plugin.app.workspace.iterateAllLeaves((leaf) => {
-    if (leaf.view?.getViewType() === "markdown") {
-      const mdView = leaf.view;
-      const cm = mdView.editor.cm;
-      if (cm && mdView.file) {
-        const annos = plugin.annoManager.data[mdView.file.path] || [];
-        const decos = createAnnotationDecorations(cm, annos, plugin);
-        cm.dispatch({ effects: AnnotationStateEffect.of(decos) });
+    try {
+      if (leaf.view?.getViewType() === "markdown") {
+        const mdView = leaf.view;
+        if (!mdView.editor) return;
+        const cm = mdView.editor.cm;
+        if (cm && mdView.file) {
+          const annos = plugin.annoManager.data[mdView.file.path] || [];
+          const decos = createAnnotationDecorations(cm, annos, plugin);
+          cm.dispatch({ effects: AnnotationStateEffect.of(decos) });
+        }
       }
+    } catch (e) {
+      console.warn("FootnoteCompass \u88C5\u9970\u5668\u66F4\u65B0\u62E6\u622A\u5F02\u5E38:", e);
     }
   });
 }
@@ -1135,8 +1140,13 @@ var FootnoteCompassSettingTab = class extends import_obsidian.PluginSettingTab {
       activeTable.createDiv({ text: "\u5F53\u524D\u6CA1\u6709\u4EFB\u4F55\u6807\u6CE8\u8BB0\u5F55\u3002", cls: "db-empty-msg" });
     }
     activeKeys.forEach((key) => {
+      const arr = this.plugin.annoManager.data[key];
+      if (!arr) {
+        delete this.plugin.annoManager.data[key];
+        return;
+      }
       const isExist = this.app.vault.getAbstractFileByPath(key) != null;
-      const count = this.plugin.annoManager.data[key].length;
+      const count = arr.length;
       if (count === 0) {
         delete this.plugin.annoManager.data[key];
         return;
@@ -1157,6 +1167,7 @@ var FootnoteCompassSettingTab = class extends import_obsidian.PluginSettingTab {
       }
       const trashBtn = actionCol.createEl("button", { text: "\u79FB\u81F3\u56DE\u6536\u533A", cls: "db-btn-trash" });
       trashBtn.onclick = async () => {
+        if (!this.plugin.annoManager.data[key]) return;
         this.plugin.annoManager.data[`${TRASH_PREFIX}${key}`] = this.plugin.annoManager.data[key];
         delete this.plugin.annoManager.data[key];
         await this.plugin.annoManager.save();
@@ -1183,8 +1194,13 @@ var FootnoteCompassSettingTab = class extends import_obsidian.PluginSettingTab {
       trashTable.createDiv({ text: "\u56DE\u6536\u7AD9\u662F\u7A7A\u7684\u3002", cls: "db-empty-msg" });
     }
     trashKeys.forEach((key) => {
+      const arr = this.plugin.annoManager.data[key];
+      if (!arr) {
+        delete this.plugin.annoManager.data[key];
+        return;
+      }
       const originalPath = key.replace(TRASH_PREFIX, "");
-      const count = this.plugin.annoManager.data[key].length;
+      const count = arr.length;
       const row = trashTable.createDiv({ cls: "db-row db-row-trashed" });
       row.createDiv({ text: "\u5DF2\u5E9F\u5F03", cls: "db-col db-col-status" });
       row.createDiv({ text: originalPath, cls: "db-col db-col-path", attr: { style: "text-decoration: line-through;" } });
@@ -1192,6 +1208,7 @@ var FootnoteCompassSettingTab = class extends import_obsidian.PluginSettingTab {
       const actionCol = row.createDiv({ cls: "db-col db-col-action" });
       const restoreBtn = actionCol.createEl("button", { text: "\u53CD\u6094\u6062\u590D", cls: "db-btn-restore" });
       restoreBtn.onclick = async () => {
+        if (!this.plugin.annoManager.data[key]) return;
         this.plugin.annoManager.data[originalPath] = this.plugin.annoManager.data[key];
         delete this.plugin.annoManager.data[key];
         await this.plugin.annoManager.save();
