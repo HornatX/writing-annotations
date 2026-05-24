@@ -218,6 +218,10 @@ var AnnotationManager = class {
           this.isLoaded = false;
           return;
         }
+      } else if (content.trim().length > 0) {
+        new import_obsidian.Notice("\u{1F6A8} \u81F4\u547D\u9519\u8BEF\uFF1A\u5728\u6570\u636E\u5E93\u4E2D\u627E\u4E0D\u5230\u5408\u6CD5\u7684 JSON \u6570\u636E\u5757\uFF01\n\u53EF\u80FD\u662F\u60A8\u7684\u6807\u8BB0\u4EE3\u7801\u88AB\u8BEF\u5220\u3002\u4E3A\u9632\u6B62\u6570\u636E\u8986\u76D6\uFF0C\u5DF2\u6682\u505C\u4FDD\u5B58\u529F\u80FD\uFF0C\u8BF7\u68C0\u67E5\u6587\u4EF6\uFF01", 15e3);
+        this.isLoaded = false;
+        return;
       }
     }
     this.isLoaded = true;

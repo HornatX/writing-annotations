@@ -290,7 +290,6 @@ class AnnotationManager {
         const file = this.plugin.app.vault.getAbstractFileByPath(path);
         if (file instanceof TFile) {
             const content = await this.plugin.app.vault.read(file);
-            // ✨ 兼容性修复：既能认出新的安全格式，也能认出旧的格式
             const match = content.match(/<!-- FC_DATA_START -->\r?\n```json\r?\n([\s\S]*?)\r?\n```\r?\n<!-- FC_DATA_END -->/)
                 || content.match(/```json\r?\n([\s\S]*?)\r?\n```/);
 
@@ -299,13 +298,15 @@ class AnnotationManager {
                     this.data = JSON.parse(match[1]);
                 } catch (e) {
                     console.error("解析变体数据失败", e);
-                    // 🚨 熔断保护：如果用户的 JSON 损坏了解析失败，立刻发出最高级别警告！
                     new Notice("🚨 致命错误：大纲变体标注数据库的 JSON 格式损坏！\n为防止数据被清空，已强制暂停保存功能。请检查数据库文件！", 15000);
-
-                    // 绝对不能设为 true！这样能拦截一切后续的 save() 覆盖行为
                     this.isLoaded = false;
-                    return; // 直接中止加载流程
+                    return;
                 }
+            } else if (content.trim().length > 0) {
+                // 🚨 新增安全拦截：文件里有内容，但是没找到合法的 JSON 块（可能用户误删了标记代码）
+                new Notice("🚨 致命错误：在数据库中找不到合法的 JSON 数据块！\n可能是您的标记代码被误删。为防止数据覆盖，已暂停保存功能，请检查文件！", 15000);
+                this.isLoaded = false; // 强行阻断后续的保存，保护现场
+                return;
             }
         }
         this.isLoaded = true;
