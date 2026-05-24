@@ -1447,6 +1447,15 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
                 }).open();
             };
         });
+
+        // 👇👇👇 新增这段代码：打断 Obsidian 的自动聚焦施法 👇👇👇
+        setTimeout(() => {
+            const firstInput = containerEl.querySelector('input[type="text"]') as HTMLElement;
+            if (firstInput && document.activeElement === firstInput) {
+                firstInput.blur(); // 强制失去焦点
+            }
+        }, 50);
+        // 👆👆👆 新增结束 👆👆👆
     }
 
 createColorSetting(containerEl: HTMLElement, name: string, desc: string, settingKey: keyof FootnoteCompassSettings) {

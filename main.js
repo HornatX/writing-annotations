@@ -1210,6 +1210,12 @@ var FootnoteCompassSettingTab = class extends import_obsidian.PluginSettingTab {
         }).open();
       };
     });
+    setTimeout(() => {
+      const firstInput = containerEl.querySelector('input[type="text"]');
+      if (firstInput && document.activeElement === firstInput) {
+        firstInput.blur();
+      }
+    }, 50);
   }
   createColorSetting(containerEl, name, desc, settingKey) {
     let colorComp, textComp;
