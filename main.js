@@ -569,6 +569,10 @@ var FootnoteListView = class extends import_obsidian.ItemView {
     const activeView = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
     if (activeView && activeView.leaf) return activeView.leaf;
     const leaves = this.app.workspace.getLeavesOfType("markdown");
+    if (this.lastActiveView) {
+      const isStillOpen = leaves.find((l) => l.view === this.lastActiveView);
+      if (isStillOpen) return isStillOpen;
+    }
     return leaves.length > 0 ? leaves[0] : null;
   }
   generateStateHash(view, refs, annos) {
@@ -583,6 +587,9 @@ var FootnoteListView = class extends import_obsidian.ItemView {
       this.lastActiveView = bestLeaf.view;
       await this.updateView(bestLeaf.view);
     } else {
+      this.lastActiveView = null;
+      this.cachedRefs = [];
+      this._lastStateHash = "";
       this.renderRefList();
     }
   }

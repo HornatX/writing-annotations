@@ -713,12 +713,19 @@ class FootnoteListView extends ItemView {
     }
 
     findBestLeaf(): WorkspaceLeaf | null {
-        // ✅ 先尝试获取当前最活跃的 Markdown 视图所在的 Leaf
+        // 1. 如果当前真实激活的窗口就是 Markdown，直接返回它
         const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
         if (activeView && activeView.leaf) return activeView.leaf;
 
-        // 如果没有活跃的，再退而求其次随便找一个打开的 markdown 窗口
+        // ✨ 核心修复 1：当焦点进入侧边栏时，不要盲目抓取第一个 MD 视图！
+        // 优先检查我们上一次正在看的那个文档是否还开着，如果在，坚决锁定它。
         const leaves = this.app.workspace.getLeavesOfType('markdown');
+        if (this.lastActiveView) {
+            const isStillOpen = leaves.find(l => l.view === this.lastActiveView);
+            if (isStillOpen) return isStillOpen;
+        }
+
+        // 3. 兜底：随便找一个打开的 markdown 窗口
         return leaves.length > 0 ? leaves[0] : null;
     }
 
@@ -736,7 +743,11 @@ class FootnoteListView extends ItemView {
             this.lastActiveView = bestLeaf.view;
             await this.updateView(bestLeaf.view);
         } else {
-            // 如果没找到任何活动叶子，也要执行一次 render，保证 UI 不会完全空荡荡
+            // ✨ 核心修复 2：当页面里真的没有任何 MD 文件（比如全部关掉，或者只有白板/图片）
+            // 彻底清理废弃缓存，这能保证下次你重新打开或切回 MD 时，侧边栏 100% 刷新！
+            this.lastActiveView = null;
+            this.cachedRefs = [];
+            this._lastStateHash = "";
             this.renderRefList();
         }
     }
