@@ -979,14 +979,16 @@ var FootnoteCompassSettingTab = class extends import_obsidian.PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.createEl("h2", { text: "\u811A\u6CE8\u4E0E\u6807\u6CE8\u5927\u7EB2 \u8BBE\u7F6E" });
-    new import_obsidian.Setting(containerEl).setName("\u6807\u6CE8\u6570\u636E\u5B58\u50A8\u6587\u4EF6").setDesc("\u6307\u5B9A\u4E00\u4E2A .md \u6587\u4EF6\u6765\u5B89\u5168\u5B58\u50A8\u4F60\u7684\u6807\u6CE8\u548C\u53D8\u4F53\u6570\u636E\u3002\u652F\u6301\u76F4\u63A5\u8F93\u5165\u65B0\u6587\u4EF6\u540D\uFF0C\u6216\u641C\u7D22\u9009\u62E9\u5DF2\u6709\u6587\u4EF6\u3002").addText((text) => {
-      text.setPlaceholder("Annotations.md").setValue(this.plugin.settings.annotationFilePath).onChange(async (value) => {
-        this.plugin.settings.annotationFilePath = value || "Annotations.md";
+    const DEFAULT_FILE = "\u5927\u7EB2\u53D8\u4F53\u6807\u6CE8\u6570\u636E\u5E93.md";
+    new import_obsidian.Setting(containerEl).setName("\u6807\u6CE8\u6570\u636E\u5B58\u50A8\u6587\u4EF6").setDesc("\u6307\u5B9A\u4E00\u4E2A .md \u6587\u4EF6\u6765\u5B89\u5168\u5B58\u50A8\u4F60\u7684\u6807\u6CE8\u548C\u53D8\u4F53\u6570\u636E\u3002\u7559\u7A7A\u5219\u9ED8\u8BA4\u4F7F\u7528\u300C\u5927\u7EB2\u53D8\u4F53\u6807\u6CE8\u6570\u636E\u5E93.md\u300D\u3002\u652F\u6301\u76F4\u63A5\u8F93\u5165\u65B0\u6587\u4EF6\u540D\uFF0C\u6216\u641C\u7D22\u9009\u62E9\u5DF2\u6709\u6587\u4EF6\u3002").addText((text) => {
+      text.setPlaceholder(DEFAULT_FILE).setValue(this.plugin.settings.annotationFilePath === DEFAULT_FILE ? "" : this.plugin.settings.annotationFilePath).onChange(async (value) => {
+        this.plugin.settings.annotationFilePath = value.trim() || DEFAULT_FILE;
         await this.plugin.saveSettings();
         await this.plugin.annoManager.load();
       });
       new FileSuggest(this.app, text, async (selectedPath) => {
         this.plugin.settings.annotationFilePath = selectedPath;
+        text.setValue(selectedPath === DEFAULT_FILE ? "" : selectedPath);
         await this.plugin.saveSettings();
         await this.plugin.annoManager.load();
       });

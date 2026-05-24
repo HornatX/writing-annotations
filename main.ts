@@ -1141,17 +1141,27 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
         containerEl.empty();
         containerEl.createEl("h2", { text: "脚注与标注大纲 设置" });
 
+        const DEFAULT_FILE = "大纲变体标注数据库.md"; // 统一声明默认常量，防止打错字
+
         new Setting(containerEl).setName("标注数据存储文件")
-            .setDesc("指定一个 .md 文件来安全存储你的标注和变体数据。支持直接输入新文件名，或搜索选择已有文件。")
+            .setDesc("指定一个 .md 文件来安全存储你的标注和变体数据。留空则默认使用「大纲变体标注数据库.md」。支持直接输入新文件名，或搜索选择已有文件。")
             .addText(text => {
-                text.setPlaceholder("Annotations.md").setValue(this.plugin.settings.annotationFilePath)
+                text.setPlaceholder(DEFAULT_FILE) // 浅色提示文字改为默认的中文名
+                    // ✨ 核心修复：如果是默认文件名，输入框不显示文字；如果是用户自定义的文件名，才显示文字
+                    .setValue(this.plugin.settings.annotationFilePath === DEFAULT_FILE ? "" : this.plugin.settings.annotationFilePath)
                     .onChange(async (value) => {
-                        this.plugin.settings.annotationFilePath = value || "Annotations.md";
-                        await this.plugin.saveSettings(); await this.plugin.annoManager.load();
+                        // ✨ 核心修复：如果用户清空输入框 (value 为空)，底层安全回退到中文默认文件名，而不是 Annotations.md
+                        this.plugin.settings.annotationFilePath = value.trim() || DEFAULT_FILE;
+                        await this.plugin.saveSettings(); 
+                        await this.plugin.annoManager.load();
                     });
+                
                 new FileSuggest(this.app, text, async (selectedPath) => {
                     this.plugin.settings.annotationFilePath = selectedPath;
-                    await this.plugin.saveSettings(); await this.plugin.annoManager.load();
+                    // 使用下拉建议选中后，如果碰巧选的是默认文件，也保持输入框清爽
+                    text.setValue(selectedPath === DEFAULT_FILE ? "" : selectedPath);
+                    await this.plugin.saveSettings(); 
+                    await this.plugin.annoManager.load();
                 });
             });
 
