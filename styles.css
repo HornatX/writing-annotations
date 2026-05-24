@@ -685,3 +685,171 @@
     background-color: var(--background-modifier-active-hover);
     color: var(--text-normal);
 }
+
+/* =========================================
+   数据库管理面板样式 (适配气泡圆角主题)
+   ========================================= */
+.db-manager-container {
+    background-color: var(--background-secondary);
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid var(--background-modifier-border);
+    margin-top: 30px;
+}
+
+.db-section-title-wrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 35px;
+    margin-bottom: 20px;
+}
+
+.db-section-title {
+    margin: 0 0 20px 0;
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--text-normal);
+}
+
+.db-table {
+    display: flex;
+    flex-direction: column;
+    gap: 12px; /* 拉开间距，保持呼吸感 */
+}
+
+/* 完美匹配你的颜色预设气泡圆角 (20px) 和阴影 */
+.db-row {
+    display: flex;
+    align-items: center;
+    background-color: var(--background-primary);
+    padding: 10px 16px;
+    border-radius: 20px; 
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    border: 1px solid transparent; 
+    transition: border-color 0.2s;
+}
+
+/* 表头：去背景、去阴影、文字对齐 */
+.db-header {
+    background-color: transparent;
+    box-shadow: none;
+    border: none;
+    font-weight: bold;
+    color: var(--text-muted);
+    padding: 4px 16px;
+}
+
+/* 丢失状态：只有边框变红，不改背景色，保持干净 */
+.db-row-missing {
+    border-color: var(--text-error);
+}
+
+/* 回收站状态：半透明，虚线边框，去阴影 */
+.db-row-trashed {
+    opacity: 0.6;
+    background-color: transparent;
+    box-shadow: none;
+    border: 1px dashed var(--background-modifier-border);
+}
+
+.db-col {
+    padding: 0 8px;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* 彻底移除了 font-family: monospace; */
+}
+
+.db-col-status { width: 60px; flex-shrink: 0; color: var(--text-muted); }
+.db-row-missing .db-col-status { color: var(--text-error); font-weight: bold; }
+
+.db-col-path { flex-grow: 1; min-width: 150px; color: var(--text-normal); }
+.db-col-count { width: 80px; flex-shrink: 0; text-align: center; color: var(--text-muted); }
+.db-col-action { width: auto; flex-shrink: 0; display: flex; gap: 8px; justify-content: flex-end; }
+
+/* 自定义原生风格按钮，避免被主题强制渲染成3D */
+.db-col-action button, .db-section-title-wrapper button {
+    padding: 4px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    box-shadow: none;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    /* 彻底移除了 height 限制，文字再也不会被截断 */
+}
+
+/* 重新指定按钮 (蓝) */
+.db-btn-relink {
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent) !important;
+}
+.db-btn-relink:hover {
+    background-color: var(--interactive-accent-hover);
+}
+
+/* 移至回收区/删除按钮 (灰底红字交互) */
+.db-btn-trash {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-muted) !important;
+}
+.db-btn-trash:hover {
+    background-color: var(--background-modifier-error-hover);
+    color: var(--text-error) !important;
+}
+
+/* 恢复按钮 (正常) */
+.db-btn-restore {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal) !important;
+}
+.db-btn-restore:hover {
+    background-color: var(--background-modifier-active-hover);
+}
+
+.db-empty-msg {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-faint);
+    font-size: 14px;
+}
+
+/* 重新关联弹窗文件列表样式 */
+.relink-file-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+    margin-top: 15px;
+}
+
+.relink-file-btn {
+    text-align: left;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background-color: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    transition: all 0.2s;
+    font-size: 14px;
+    /* 移除了 monospace */
+}
+
+.relink-file-btn:hover {
+    background-color: var(--background-modifier-hover);
+    border-color: var(--interactive-accent);
+}
+
+/* 重新指定按钮 (强行适配主题的主题蓝) */
+button.db-btn-relink {
+    background-color: var(--interactive-accent) !important;
+    color: var(--text-on-accent) !important;
+    font-weight: 500 !important;
+}
+
+button.db-btn-relink:hover {
+    background-color: var(--interactive-accent-hover) !important;
+    opacity: 0.9 !important;
+}

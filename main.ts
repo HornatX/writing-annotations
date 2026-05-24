@@ -398,6 +398,82 @@ class CommentModal extends Modal {
     onClose() { this.contentEl.empty(); }
 }
 
+// --- 数据库管理：重新关联文件的模态框 ---
+class RelinkModal extends Modal {
+    constructor(
+        app: App, 
+        public oldPath: string, 
+        public plugin: FootnoteCompassPlugin, 
+        public onSuccess: () => void
+    ) {
+        super(app);
+    }
+
+    onOpen() {
+        const { contentEl } = this;
+        this.setTitle("重新指定文件映射");
+        
+        // 提取丢掉的文件名（比如 "全局.md"）
+        const missingFileName = this.oldPath.split('/').pop() || "";
+        
+        contentEl.createEl("p", { 
+            text: `记录中的文件为：【${this.oldPath}】\n由于被外部移动或删除，现已断联。`,
+            cls: "annotation-confirm-msg" 
+        });
+
+        contentEl.createEl("p", { 
+            text: `⚠️ 强制安全规则：你只能将其重新关联到名为 "${missingFileName}" 的文件。`,
+            cls: "annotation-confirm-msg",
+            attr: { style: "color: var(--text-warning); font-size: 13px;" }
+        });
+
+        // 查找库中所有文件名完全一样的文件
+        const matchingFiles = this.app.vault.getMarkdownFiles().filter(f => f.name === missingFileName);
+
+        const listContainer = contentEl.createDiv({ cls: "relink-file-list" });
+
+        if (matchingFiles.length === 0) {
+            listContainer.createDiv({ 
+                text: "❌ 在当前整个知识库中，没有找到同名文件。如果你在外部改名了，请先改回原名。", 
+                attr: { style: "color: var(--text-error); padding: 10px; background: var(--background-modifier-error);" }
+            });
+        } else {
+            matchingFiles.forEach(file => {
+                const btn = listContainer.createEl("button", { 
+                    text: `🔗 关联至: ${file.path}`,
+                    cls: "relink-file-btn" 
+                });
+                btn.onclick = async () => {
+                    // 核心数据转移逻辑
+                    this.plugin.annoManager.data[file.path] = this.plugin.annoManager.data[this.oldPath];
+                    delete this.plugin.annoManager.data[this.oldPath];
+                    
+                    // 转移UI偏好
+                    if (this.plugin.settings.headingFilters[this.oldPath]) {
+                        this.plugin.settings.headingFilters[file.path] = this.plugin.settings.headingFilters[this.oldPath];
+                        delete this.plugin.settings.headingFilters[this.oldPath];
+                    }
+                    if (this.plugin.settings.displayModes[this.oldPath]) {
+                        this.plugin.settings.displayModes[file.path] = this.plugin.settings.displayModes[this.oldPath];
+                        delete this.plugin.settings.displayModes[this.oldPath];
+                    }
+
+                    await this.plugin.annoManager.save();
+                    await this.plugin.saveSettings();
+                    
+                    // 刷新UI和正文装饰器
+                    updateEditorDecorations(this.plugin);
+                    this.onSuccess();
+                    this.close();
+                    new Notice("✅ 重新关联成功！");
+                };
+            });
+        }
+    }
+
+    onClose() { this.contentEl.empty(); }
+}
+
 // --- 核心视图类 ---
 class FootnoteListView extends ItemView {
     plugin: FootnoteCompassPlugin;
@@ -1203,6 +1279,128 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
             delBtn.onclick = async () => {
                 this.plugin.settings.colorPresets.splice(index, 1);
                 await this.plugin.saveSettings(); this.display();
+            };
+        });
+// ==========================================
+        // ✨ 新增：数据库底层映射与回收站管理面板 (纯净版UI)
+        // ==========================================
+        containerEl.createEl("h3", { text: "数据库文件映射管理", cls: "setting-section-header" });
+        containerEl.createEl("p", { 
+            text: "当你发现在外部（如 Win10 文件夹）移动或删除了文件导致标注失效时，可以在这里进行安全找回或彻底清理。", 
+            cls: "setting-item-description" 
+        });
+
+        const dbContainer = containerEl.createDiv({ cls: "db-manager-container" });
+        
+        const TRASH_PREFIX = "__TRASH__";
+        const allKeys = Object.keys(this.plugin.annoManager.data);
+        const activeKeys = allKeys.filter(k => !k.startsWith(TRASH_PREFIX));
+        const trashKeys = allKeys.filter(k => k.startsWith(TRASH_PREFIX));
+
+        // --- 1. 当前生效的标注文件区 ---
+        dbContainer.createEl("h4", { text: "当前有效记录", cls: "db-section-title" });
+        const activeTable = dbContainer.createDiv({ cls: "db-table" });
+        
+        const headerRow = activeTable.createDiv({ cls: "db-row db-header" });
+        headerRow.createDiv({ text: "状态", cls: "db-col db-col-status" });
+        headerRow.createDiv({ text: "记录中的路径 (Key)", cls: "db-col db-col-path" });
+        headerRow.createDiv({ text: "标注数", cls: "db-col db-col-count" });
+        headerRow.createDiv({ text: "操作", cls: "db-col db-col-action" });
+
+        if (activeKeys.length === 0) {
+            activeTable.createDiv({ text: "当前没有任何标注记录。", cls: "db-empty-msg" });
+        }
+
+        activeKeys.forEach(key => {
+            const isExist = this.app.vault.getAbstractFileByPath(key) != null;
+            const count = this.plugin.annoManager.data[key].length;
+            
+            if (count === 0) {
+                delete this.plugin.annoManager.data[key];
+                return;
+            }
+
+            const row = activeTable.createDiv({ cls: `db-row ${!isExist ? 'db-row-missing' : ''}` });
+            
+            row.createDiv({ text: isExist ? "正常" : "丢失", cls: "db-col db-col-status" });
+            row.createDiv({ text: key, cls: "db-col db-col-path" });
+            row.createDiv({ text: `${count} 条`, cls: "db-col db-col-count" });
+            
+            const actionCol = row.createDiv({ cls: "db-col db-col-action" });
+            if (!isExist) {
+                const relinkBtn = actionCol.createEl("button", { text: "重新指定", cls: "db-btn-relink" });
+                relinkBtn.onclick = () => {
+                    new RelinkModal(this.app, key, this.plugin, () => {
+                        this.forceRefreshSidebar();
+                        this.display();
+                    }).open();
+                };
+            }
+            
+            const trashBtn = actionCol.createEl("button", { text: "移至回收区", cls: "db-btn-trash" });
+            trashBtn.onclick = async () => {
+                this.plugin.annoManager.data[`${TRASH_PREFIX}${key}`] = this.plugin.annoManager.data[key];
+                delete this.plugin.annoManager.data[key];
+                await this.plugin.annoManager.save();
+                updateEditorDecorations(this.plugin);
+                this.forceRefreshSidebar();
+                this.display();
+            };
+        });
+
+        // --- 2. 回收站区 ---
+        const trashHeader = dbContainer.createDiv({ cls: "db-section-title-wrapper" });
+        trashHeader.createEl("h4", { text: "回收站", cls: "db-section-title", attr: { style: "margin:0;" }});
+        
+        if (trashKeys.length > 0) {
+            const emptyTrashBtn = trashHeader.createEl("button", { text: "清空回收站", cls: "db-btn-trash" });
+            emptyTrashBtn.onclick = () => {
+                // ✨ 带有 Obsidian 原生二次确认的清空回收站
+                new ConfirmModal(this.app, "清空回收站", "警告：彻底清空后，回收站内的所有数据将从 Markdown 数据库中完全抹除，无法恢复！确认清空吗？", async () => {
+                    trashKeys.forEach(k => delete this.plugin.annoManager.data[k]);
+                    await this.plugin.annoManager.save();
+                    this.display();
+                    new Notice("回收站已清空。");
+                }).open();
+            };
+        }
+
+        const trashTable = dbContainer.createDiv({ cls: "db-table" });
+        if (trashKeys.length === 0) {
+            trashTable.createDiv({ text: "回收站是空的。", cls: "db-empty-msg" });
+        }
+
+        trashKeys.forEach(key => {
+            const originalPath = key.replace(TRASH_PREFIX, "");
+            const count = this.plugin.annoManager.data[key].length;
+            const row = trashTable.createDiv({ cls: "db-row db-row-trashed" });
+            
+            row.createDiv({ text: "已废弃", cls: "db-col db-col-status" });
+            row.createDiv({ text: originalPath, cls: "db-col db-col-path", attr: { style: "text-decoration: line-through;" } });
+            row.createDiv({ text: `${count} 条`, cls: "db-col db-col-count" });
+            
+            const actionCol = row.createDiv({ cls: "db-col db-col-action" });
+            
+            const restoreBtn = actionCol.createEl("button", { text: "反悔恢复", cls: "db-btn-restore" });
+            restoreBtn.onclick = async () => {
+                this.plugin.annoManager.data[originalPath] = this.plugin.annoManager.data[key];
+                delete this.plugin.annoManager.data[key];
+                await this.plugin.annoManager.save();
+                updateEditorDecorations(this.plugin);
+                this.forceRefreshSidebar();
+                this.display();
+                new Notice("已恢复该记录。");
+            };
+            
+            const delBtn = actionCol.createEl("button", { text: "彻底删除", cls: "db-btn-trash" });
+            delBtn.onclick = () => {
+                // ✨ 新增：针对单条彻底删除的 Obsidian 原生二次确认
+                new ConfirmModal(this.app, "彻底删除单条记录", `确定要彻底删除文件【${originalPath}】的全部标注记录吗？此操作不可恢复！`, async () => {
+                    delete this.plugin.annoManager.data[key];
+                    await this.plugin.annoManager.save();
+                    this.display();
+                    new Notice("已彻底删除该记录。");
+                }).open();
             };
         });
     }

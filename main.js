@@ -335,6 +335,65 @@ var CommentModal = class extends import_obsidian.Modal {
     this.contentEl.empty();
   }
 };
+var RelinkModal = class extends import_obsidian.Modal {
+  constructor(app, oldPath, plugin, onSuccess) {
+    super(app);
+    this.oldPath = oldPath;
+    this.plugin = plugin;
+    this.onSuccess = onSuccess;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    this.setTitle("\u91CD\u65B0\u6307\u5B9A\u6587\u4EF6\u6620\u5C04");
+    const missingFileName = this.oldPath.split("/").pop() || "";
+    contentEl.createEl("p", {
+      text: `\u8BB0\u5F55\u4E2D\u7684\u6587\u4EF6\u4E3A\uFF1A\u3010${this.oldPath}\u3011
+\u7531\u4E8E\u88AB\u5916\u90E8\u79FB\u52A8\u6216\u5220\u9664\uFF0C\u73B0\u5DF2\u65AD\u8054\u3002`,
+      cls: "annotation-confirm-msg"
+    });
+    contentEl.createEl("p", {
+      text: `\u26A0\uFE0F \u5F3A\u5236\u5B89\u5168\u89C4\u5219\uFF1A\u4F60\u53EA\u80FD\u5C06\u5176\u91CD\u65B0\u5173\u8054\u5230\u540D\u4E3A "${missingFileName}" \u7684\u6587\u4EF6\u3002`,
+      cls: "annotation-confirm-msg",
+      attr: { style: "color: var(--text-warning); font-size: 13px;" }
+    });
+    const matchingFiles = this.app.vault.getMarkdownFiles().filter((f) => f.name === missingFileName);
+    const listContainer = contentEl.createDiv({ cls: "relink-file-list" });
+    if (matchingFiles.length === 0) {
+      listContainer.createDiv({
+        text: "\u274C \u5728\u5F53\u524D\u6574\u4E2A\u77E5\u8BC6\u5E93\u4E2D\uFF0C\u6CA1\u6709\u627E\u5230\u540C\u540D\u6587\u4EF6\u3002\u5982\u679C\u4F60\u5728\u5916\u90E8\u6539\u540D\u4E86\uFF0C\u8BF7\u5148\u6539\u56DE\u539F\u540D\u3002",
+        attr: { style: "color: var(--text-error); padding: 10px; background: var(--background-modifier-error);" }
+      });
+    } else {
+      matchingFiles.forEach((file) => {
+        const btn = listContainer.createEl("button", {
+          text: `\u{1F517} \u5173\u8054\u81F3: ${file.path}`,
+          cls: "relink-file-btn"
+        });
+        btn.onclick = async () => {
+          this.plugin.annoManager.data[file.path] = this.plugin.annoManager.data[this.oldPath];
+          delete this.plugin.annoManager.data[this.oldPath];
+          if (this.plugin.settings.headingFilters[this.oldPath]) {
+            this.plugin.settings.headingFilters[file.path] = this.plugin.settings.headingFilters[this.oldPath];
+            delete this.plugin.settings.headingFilters[this.oldPath];
+          }
+          if (this.plugin.settings.displayModes[this.oldPath]) {
+            this.plugin.settings.displayModes[file.path] = this.plugin.settings.displayModes[this.oldPath];
+            delete this.plugin.settings.displayModes[this.oldPath];
+          }
+          await this.plugin.annoManager.save();
+          await this.plugin.saveSettings();
+          updateEditorDecorations(this.plugin);
+          this.onSuccess();
+          this.close();
+          new import_obsidian.Notice("\u2705 \u91CD\u65B0\u5173\u8054\u6210\u529F\uFF01");
+        };
+      });
+    }
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
 var FootnoteListView = class extends import_obsidian.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
@@ -1030,6 +1089,102 @@ var FootnoteCompassSettingTab = class extends import_obsidian.PluginSettingTab {
         this.plugin.settings.colorPresets.splice(index, 1);
         await this.plugin.saveSettings();
         this.display();
+      };
+    });
+    containerEl.createEl("h3", { text: "\u6570\u636E\u5E93\u6587\u4EF6\u6620\u5C04\u7BA1\u7406", cls: "setting-section-header" });
+    containerEl.createEl("p", {
+      text: "\u5F53\u4F60\u53D1\u73B0\u5728\u5916\u90E8\uFF08\u5982 Win10 \u6587\u4EF6\u5939\uFF09\u79FB\u52A8\u6216\u5220\u9664\u4E86\u6587\u4EF6\u5BFC\u81F4\u6807\u6CE8\u5931\u6548\u65F6\uFF0C\u53EF\u4EE5\u5728\u8FD9\u91CC\u8FDB\u884C\u5B89\u5168\u627E\u56DE\u6216\u5F7B\u5E95\u6E05\u7406\u3002",
+      cls: "setting-item-description"
+    });
+    const dbContainer = containerEl.createDiv({ cls: "db-manager-container" });
+    const TRASH_PREFIX = "__TRASH__";
+    const allKeys = Object.keys(this.plugin.annoManager.data);
+    const activeKeys = allKeys.filter((k) => !k.startsWith(TRASH_PREFIX));
+    const trashKeys = allKeys.filter((k) => k.startsWith(TRASH_PREFIX));
+    dbContainer.createEl("h4", { text: "\u5F53\u524D\u6709\u6548\u8BB0\u5F55", cls: "db-section-title" });
+    const activeTable = dbContainer.createDiv({ cls: "db-table" });
+    const headerRow = activeTable.createDiv({ cls: "db-row db-header" });
+    headerRow.createDiv({ text: "\u72B6\u6001", cls: "db-col db-col-status" });
+    headerRow.createDiv({ text: "\u8BB0\u5F55\u4E2D\u7684\u8DEF\u5F84 (Key)", cls: "db-col db-col-path" });
+    headerRow.createDiv({ text: "\u6807\u6CE8\u6570", cls: "db-col db-col-count" });
+    headerRow.createDiv({ text: "\u64CD\u4F5C", cls: "db-col db-col-action" });
+    if (activeKeys.length === 0) {
+      activeTable.createDiv({ text: "\u5F53\u524D\u6CA1\u6709\u4EFB\u4F55\u6807\u6CE8\u8BB0\u5F55\u3002", cls: "db-empty-msg" });
+    }
+    activeKeys.forEach((key) => {
+      const isExist = this.app.vault.getAbstractFileByPath(key) != null;
+      const count = this.plugin.annoManager.data[key].length;
+      if (count === 0) {
+        delete this.plugin.annoManager.data[key];
+        return;
+      }
+      const row = activeTable.createDiv({ cls: `db-row ${!isExist ? "db-row-missing" : ""}` });
+      row.createDiv({ text: isExist ? "\u6B63\u5E38" : "\u4E22\u5931", cls: "db-col db-col-status" });
+      row.createDiv({ text: key, cls: "db-col db-col-path" });
+      row.createDiv({ text: `${count} \u6761`, cls: "db-col db-col-count" });
+      const actionCol = row.createDiv({ cls: "db-col db-col-action" });
+      if (!isExist) {
+        const relinkBtn = actionCol.createEl("button", { text: "\u91CD\u65B0\u6307\u5B9A", cls: "db-btn-relink" });
+        relinkBtn.onclick = () => {
+          new RelinkModal(this.app, key, this.plugin, () => {
+            this.forceRefreshSidebar();
+            this.display();
+          }).open();
+        };
+      }
+      const trashBtn = actionCol.createEl("button", { text: "\u79FB\u81F3\u56DE\u6536\u533A", cls: "db-btn-trash" });
+      trashBtn.onclick = async () => {
+        this.plugin.annoManager.data[`${TRASH_PREFIX}${key}`] = this.plugin.annoManager.data[key];
+        delete this.plugin.annoManager.data[key];
+        await this.plugin.annoManager.save();
+        updateEditorDecorations(this.plugin);
+        this.forceRefreshSidebar();
+        this.display();
+      };
+    });
+    const trashHeader = dbContainer.createDiv({ cls: "db-section-title-wrapper" });
+    trashHeader.createEl("h4", { text: "\u56DE\u6536\u7AD9", cls: "db-section-title", attr: { style: "margin:0;" } });
+    if (trashKeys.length > 0) {
+      const emptyTrashBtn = trashHeader.createEl("button", { text: "\u6E05\u7A7A\u56DE\u6536\u7AD9", cls: "db-btn-trash" });
+      emptyTrashBtn.onclick = () => {
+        new ConfirmModal(this.app, "\u6E05\u7A7A\u56DE\u6536\u7AD9", "\u8B66\u544A\uFF1A\u5F7B\u5E95\u6E05\u7A7A\u540E\uFF0C\u56DE\u6536\u7AD9\u5185\u7684\u6240\u6709\u6570\u636E\u5C06\u4ECE Markdown \u6570\u636E\u5E93\u4E2D\u5B8C\u5168\u62B9\u9664\uFF0C\u65E0\u6CD5\u6062\u590D\uFF01\u786E\u8BA4\u6E05\u7A7A\u5417\uFF1F", async () => {
+          trashKeys.forEach((k) => delete this.plugin.annoManager.data[k]);
+          await this.plugin.annoManager.save();
+          this.display();
+          new import_obsidian.Notice("\u56DE\u6536\u7AD9\u5DF2\u6E05\u7A7A\u3002");
+        }).open();
+      };
+    }
+    const trashTable = dbContainer.createDiv({ cls: "db-table" });
+    if (trashKeys.length === 0) {
+      trashTable.createDiv({ text: "\u56DE\u6536\u7AD9\u662F\u7A7A\u7684\u3002", cls: "db-empty-msg" });
+    }
+    trashKeys.forEach((key) => {
+      const originalPath = key.replace(TRASH_PREFIX, "");
+      const count = this.plugin.annoManager.data[key].length;
+      const row = trashTable.createDiv({ cls: "db-row db-row-trashed" });
+      row.createDiv({ text: "\u5DF2\u5E9F\u5F03", cls: "db-col db-col-status" });
+      row.createDiv({ text: originalPath, cls: "db-col db-col-path", attr: { style: "text-decoration: line-through;" } });
+      row.createDiv({ text: `${count} \u6761`, cls: "db-col db-col-count" });
+      const actionCol = row.createDiv({ cls: "db-col db-col-action" });
+      const restoreBtn = actionCol.createEl("button", { text: "\u53CD\u6094\u6062\u590D", cls: "db-btn-restore" });
+      restoreBtn.onclick = async () => {
+        this.plugin.annoManager.data[originalPath] = this.plugin.annoManager.data[key];
+        delete this.plugin.annoManager.data[key];
+        await this.plugin.annoManager.save();
+        updateEditorDecorations(this.plugin);
+        this.forceRefreshSidebar();
+        this.display();
+        new import_obsidian.Notice("\u5DF2\u6062\u590D\u8BE5\u8BB0\u5F55\u3002");
+      };
+      const delBtn = actionCol.createEl("button", { text: "\u5F7B\u5E95\u5220\u9664", cls: "db-btn-trash" });
+      delBtn.onclick = () => {
+        new ConfirmModal(this.app, "\u5F7B\u5E95\u5220\u9664\u5355\u6761\u8BB0\u5F55", `\u786E\u5B9A\u8981\u5F7B\u5E95\u5220\u9664\u6587\u4EF6\u3010${originalPath}\u3011\u7684\u5168\u90E8\u6807\u6CE8\u8BB0\u5F55\u5417\uFF1F\u6B64\u64CD\u4F5C\u4E0D\u53EF\u6062\u590D\uFF01`, async () => {
+          delete this.plugin.annoManager.data[key];
+          await this.plugin.annoManager.save();
+          this.display();
+          new import_obsidian.Notice("\u5DF2\u5F7B\u5E95\u5220\u9664\u8BE5\u8BB0\u5F55\u3002");
+        }).open();
       };
     });
   }
