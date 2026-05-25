@@ -368,17 +368,20 @@ var CommentModal = class extends import_obsidian.Modal {
   }
   onOpen() {
     this.setTitle(this.titleText);
-    new import_obsidian.Setting(this.contentEl).setName("\u5185\u5BB9\u6587\u5B57").setDesc("\u8F93\u5165\u53D8\u4F53\u5185\u5BB9\uFF0C\u6309\u56DE\u8F66\u952E\u76F4\u63A5\u4FDD\u5B58\u3002").addText((text) => {
+    const textSetting = new import_obsidian.Setting(this.contentEl).setName("\u5185\u5BB9\u6587\u5B57").setDesc("\u8F93\u5165\u53D8\u4F53\u5185\u5BB9\u3002(Enter \u4FDD\u5B58\uFF0CShift + Enter \u6362\u884C)").addTextArea((text) => {
       text.setValue(this.result).onChange((val) => this.result = val);
       text.inputEl.style.width = "100%";
+      text.inputEl.style.minHeight = "120px";
+      text.inputEl.style.resize = "vertical";
       text.inputEl.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && !e.isComposing) {
+        if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
           e.preventDefault();
           if (this.result.trim()) this.onSubmit(this.result.trim());
           this.close();
         }
       });
     });
+    textSetting.settingEl.addClass("annotation-textarea-setting");
     const btnSetting = new import_obsidian.Setting(this.contentEl);
     btnSetting.infoEl.style.display = "none";
     btnSetting.controlEl.style.width = "100%";

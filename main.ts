@@ -473,18 +473,33 @@ class CommentModal extends Modal {
     }
     onOpen() {
         this.setTitle(this.titleText);
-        new Setting(this.contentEl).setName("内容文字").setDesc("输入变体内容，按回车键直接保存。")
-            .addText(text => {
+        
+        // 1. 保存这个 Setting 的实例，方便后续加 CSS 类名
+        const textSetting = new Setting(this.contentEl)
+            .setName("内容文字")
+            // 2. 修改提示语，告知用户如何换行
+            .setDesc("输入变体内容。(Enter 保存，Shift + Enter 换行)") 
+            // 3. 改为 addTextArea
+            .addTextArea(text => {
                 text.setValue(this.result).onChange(val => this.result = val);
+                
+                // 4. 设置文本框的基础样式
                 text.inputEl.style.width = "100%";
+                text.inputEl.style.minHeight = "120px"; // 给一个足够大的初始高度
+                text.inputEl.style.resize = "vertical"; // 允许用户鼠标拖拽调节高度
+
                 text.inputEl.addEventListener("keydown", (e: KeyboardEvent) => {
-                    if (e.key === "Enter" && !e.isComposing) {
+                    // 5. 逻辑修改：只有按下 Enter 且 没有按 Shift 时才保存；按 Shift+Enter 则正常换行
+                    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
                         e.preventDefault();
                         if (this.result.trim()) this.onSubmit(this.result.trim());
                         this.close();
                     }
                 });
             });
+
+        // 6. 给这个包裹元素加一个专属的 CSS 类，用于强制上下排版
+        textSetting.settingEl.addClass("annotation-textarea-setting");
 
         const btnSetting = new Setting(this.contentEl);
         btnSetting.infoEl.style.display = "none";

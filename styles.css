@@ -967,3 +967,45 @@ button.db-btn-relink:hover {
 .annotation-checkbox:checked::after {
     display: none !important;
 }
+
+
+/* =========================================
+   变体编辑弹窗：多行文本框垂直排版优化
+   ========================================= */
+.annotation-textarea-setting {
+    display: flex;
+    flex-direction: column; /* 强制上下垂直排列 */
+    align-items: flex-start; /* 左对齐 */
+    gap: 12px;
+    padding: 18px 0; /* 让上下留白更均匀呼吸感 */
+}
+
+/* 标题与描述部分占满宽度 */
+.annotation-textarea-setting .setting-item-info {
+    width: 100%;
+}
+
+/* 输入框容器占满宽度 */
+.annotation-textarea-setting .setting-item-control {
+    width: 100%;
+    justify-content: flex-start;
+}
+
+/* 文本框本身的细节美化 */
+.annotation-textarea-setting textarea {
+    width: 100%;
+    padding: 12px 14px;
+    font-size: 15px; /* 字体稍微放大方便阅读 */
+    line-height: 1.6;
+    border-radius: 10px; /* 适配你图中的圆角风格 */
+    background-color: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+/* 输入框聚焦时的发光效果 */
+.annotation-textarea-setting textarea:focus {
+    border-color: var(--interactive-accent);
+    box-shadow: 0 0 0 2px var(--background-modifier-active-hover);
+    outline: none;
+}
