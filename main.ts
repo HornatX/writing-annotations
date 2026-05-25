@@ -190,16 +190,17 @@ class PhantomWidget extends WidgetType {
     eq(other: PhantomWidget) {
         return other.text === this.text && other.color === this.color && other.annoId === this.annoId && other.isOriginal === this.isOriginal;
     }
-    toDOM() {
+
+
+
+    toDOM(view: EditorView) {
         const span = document.createElement("span");
 
         if (this.isOriginal) {
-            // ✨ 渲染原文本：保留高亮样式，但变成不可编辑的块
             span.className = "annotation-highlight annotation-protected-block";
             span.style.backgroundColor = hexToRgba(this.color, 0.25);
             span.style.borderBottom = `2px solid ${this.color}`;
         } else {
-            // 渲染变体分支：幻影样式
             span.className = "annotation-phantom";
             span.style.color = this.color;
             span.style.borderBottomColor = this.color;
@@ -208,8 +209,22 @@ class PhantomWidget extends WidgetType {
 
         span.textContent = this.text;
 
-        // 鼠标点击抢夺焦点，触发侧边栏展开
-        span.onmousedown = () => {
+        // 🌟 修复 2：重写鼠标点击事件
+        span.onmousedown = (e: MouseEvent) => {
+            // 🛑 核心修复：阻止浏览器的默认点击行为！
+            // 防止浏览器把光标强行塞入 atomicRange 导致 CM6 状态树崩溃（光标消失）
+            e.preventDefault(); 
+            
+            // 🛑 核心修复：手动夺回焦点，并将光标安全地放在这个高亮块的前面
+            view.focus();
+            const pos = view.posAtDOM(span);
+            if (pos !== null) {
+                view.dispatch({
+                    selection: { anchor: pos, head: pos }
+                });
+            }
+
+            // 触发侧边栏展开
             const event = new CustomEvent('footnote-compass-expand-card', { detail: { annoId: this.annoId } });
             window.dispatchEvent(event);
         };

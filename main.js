@@ -119,7 +119,7 @@ var PhantomWidget = class extends import_view.WidgetType {
   eq(other) {
     return other.text === this.text && other.color === this.color && other.annoId === this.annoId && other.isOriginal === this.isOriginal;
   }
-  toDOM() {
+  toDOM(view) {
     const span = document.createElement("span");
     if (this.isOriginal) {
       span.className = "annotation-highlight annotation-protected-block";
@@ -132,7 +132,15 @@ var PhantomWidget = class extends import_view.WidgetType {
       span.style.backgroundColor = hexToRgba(this.color, 0.15);
     }
     span.textContent = this.text;
-    span.onmousedown = () => {
+    span.onmousedown = (e) => {
+      e.preventDefault();
+      view.focus();
+      const pos = view.posAtDOM(span);
+      if (pos !== null) {
+        view.dispatch({
+          selection: { anchor: pos, head: pos }
+        });
+      }
       const event = new CustomEvent("footnote-compass-expand-card", { detail: { annoId: this.annoId } });
       window.dispatchEvent(event);
     };
