@@ -107,24 +107,31 @@ var FileSuggest = class extends import_obsidian.AbstractInputSuggest {
   }
 };
 var PhantomWidget = class extends import_view.WidgetType {
-  // ✨ 新增：接收 annoId，用于记住自己是哪一个标注的变体
-  constructor(text, color, annoId) {
+  // ✨ 新增 isOriginal 参数，判断当前渲染的是不是原文本
+  constructor(text, color, annoId, isOriginal = false) {
     super();
     this.text = text;
     this.color = color;
     this.annoId = annoId;
-    this.color = color || "#009dff";
+    this.isOriginal = isOriginal;
+    this.color = color || (isOriginal ? "#ff4444" : "#009dff");
   }
   eq(other) {
-    return other.text === this.text && other.color === this.color && other.annoId === this.annoId;
+    return other.text === this.text && other.color === this.color && other.annoId === this.annoId && other.isOriginal === this.isOriginal;
   }
   toDOM() {
     const span = document.createElement("span");
-    span.className = "annotation-phantom";
+    if (this.isOriginal) {
+      span.className = "annotation-highlight annotation-protected-block";
+      span.style.backgroundColor = hexToRgba(this.color, 0.25);
+      span.style.borderBottom = `2px solid ${this.color}`;
+    } else {
+      span.className = "annotation-phantom";
+      span.style.color = this.color;
+      span.style.borderBottomColor = this.color;
+      span.style.backgroundColor = hexToRgba(this.color, 0.15);
+    }
     span.textContent = this.text;
-    span.style.color = this.color;
-    span.style.borderBottomColor = this.color;
-    span.style.backgroundColor = hexToRgba(this.color, 0.15);
     span.onmousedown = () => {
       const event = new CustomEvent("footnote-compass-expand-card", { detail: { annoId: this.annoId } });
       window.dispatchEvent(event);
@@ -144,7 +151,10 @@ var annotationField = import_state.StateField.define({
     }
     return decos;
   },
-  provide: (f) => import_view.EditorView.decorations.from(f)
+  provide: (f) => [
+    import_view.EditorView.decorations.from(f),
+    import_view.EditorView.atomicRanges.of((view) => view.state.field(f))
+  ]
 });
 function createAnnotationDecorations(view, annotations, plugin) {
   const builder = new import_state.RangeSetBuilder();
@@ -165,13 +175,13 @@ function createAnnotationDecorations(view, annotations, plugin) {
       decos.push({
         from: match.start,
         to: match.end,
-        deco: import_view.Decoration.replace({ widget: new PhantomWidget(checkedComment.text, pColor, anno.id), inclusive: false })
+        deco: import_view.Decoration.replace({ widget: new PhantomWidget(checkedComment.text, pColor, anno.id, false), inclusive: false })
       });
     } else {
       decos.push({
         from: match.start,
         to: match.end,
-        deco: import_view.Decoration.mark({ class: "annotation-highlight", attributes: { style: `background-color: ${hexToRgba(hColor, 0.25)}; border-bottom-color: ${hColor};` } })
+        deco: import_view.Decoration.replace({ widget: new PhantomWidget(anno.original, hColor, anno.id, true), inclusive: false })
       });
     }
   });
@@ -968,33 +978,34 @@ var FootnoteListView = class extends import_obsidian.ItemView {
             });
             menu.addSeparator();
             menu.addItem((item) => {
-              item.setTitle("\u91CD\u65B0\u9009\u62E9\u6587\u672C").setIcon("text-cursor").onClick(async () => {
+              item.setTitle("\u4FEE\u6539\u539F\u6587\u672C").setIcon("pencil").onClick(async () => {
                 const view = this.lastActiveView;
                 if (!view || !view.editor) return;
-                const editor = view.editor;
-                const selectedText = editor.getSelection();
-                if (!selectedText || selectedText.trim().length === 0) {
-                  new import_obsidian.Notice("\u26A0\uFE0F \u66FF\u6362\u63D0\u793A\uFF1A\n\u8BF7\u5148\u5728\u6B63\u6587\u4E2D\u3010\u9009\u4E2D\u4E00\u6BB5\u65B0\u6587\u672C\u3011\uFF0C\u7136\u540E\u518D\u6765\u70B9\u51FB\u6B64\u9009\u9879\uFF01", 4e3);
-                  return;
-                }
-                const cursorFrom = editor.getCursor("from");
-                const cursorTo = editor.getCursor("to");
-                if (cursorFrom.line !== cursorTo.line) {
-                  new import_obsidian.Notice("\u26A0\uFE0F \u6682\u4E0D\u652F\u6301\u8DE8\u884C\u91CD\u65B0\u7ED1\u5B9A\u6587\u672C\uFF0C\u8BF7\u5728\u540C\u4E00\u6BB5\u843D\u5185\u9009\u62E9\uFF01");
-                  return;
-                }
-                const cursor = editor.getCursor("from");
-                const lineText = editor.getLine(cursor.line);
-                anno.original = selectedText;
-                anno.prefix = lineText.substring(Math.max(0, cursor.ch - 30), cursor.ch);
-                anno.suffix = lineText.substring(cursor.ch + selectedText.length, cursor.ch + selectedText.length + 30);
-                anno.expectedOffset = editor.posToOffset(cursor);
-                await this.plugin.annoManager.save();
-                updateEditorDecorations(this.plugin);
-                this._lastStateHash = "";
-                this.checkAndUpdate();
-                new import_obsidian.Notice(`\u2705 \u7ED1\u5B9A\u7684\u539F\u6587\u672C\u5DF2\u6210\u529F\u4FEE\u6539\u4E3A\uFF1A
-"${selectedText}"`);
+                new CommentModal(this.app, "\u4FEE\u6539\u6807\u6CE8\u539F\u6587\u672C", anno.original, async (newText) => {
+                  if (!newText || newText === anno.original) return;
+                  const editor = view.editor;
+                  const fullText2 = editor.getValue();
+                  const match = findAnnotationOffsetAndHeal(fullText2, anno);
+                  if (!match) {
+                    new import_obsidian.Notice("\u26A0\uFE0F \u65E0\u6CD5\u5728\u6B63\u6587\u4E2D\u5B9A\u4F4D\u539F\u6587\u672C\uFF0C\u8BF7\u786E\u4FDD\u6587\u672C\u672A\u88AB\u7834\u574F\uFF01");
+                    return;
+                  }
+                  const fromPos = editor.offsetToPos(match.start);
+                  const toPos = editor.offsetToPos(match.end);
+                  editor.replaceRange(newText, fromPos, toPos);
+                  const cursor = editor.offsetToPos(match.start);
+                  const lineText = editor.getLine(cursor.line);
+                  anno.original = newText;
+                  anno.prefix = lineText.substring(Math.max(0, cursor.ch - 30), cursor.ch);
+                  anno.suffix = lineText.substring(cursor.ch + newText.length, cursor.ch + newText.length + 30);
+                  anno.expectedOffset = match.start;
+                  await this.plugin.annoManager.save();
+                  updateEditorDecorations(this.plugin);
+                  this._lastStateHash = "";
+                  this.checkAndUpdate();
+                  new import_obsidian.Notice(`\u2705 \u539F\u6587\u672C\u5DF2\u6210\u529F\u4FEE\u6539\u4E3A\uFF1A
+"${newText}"`);
+                }).open();
               });
             });
             menu.addItem((item) => {

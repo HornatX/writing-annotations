@@ -179,26 +179,35 @@ class FileSuggest extends AbstractInputSuggest<TFile> {
     }
 }
 
-// --- CM6：变体幽灵文本 ---
+// --- CM6：变体幽灵文本 (重构版：支持原文本块与分支块) ---
 class PhantomWidget extends WidgetType {
-    // ✨ 新增：接收 annoId，用于记住自己是哪一个标注的变体
-    constructor(public text: string, public color: string, public annoId: string) {
+    // ✨ 新增 isOriginal 参数，判断当前渲染的是不是原文本
+    constructor(public text: string, public color: string, public annoId: string, public isOriginal: boolean = false) {
         super();
-        this.color = color || "#009dff";
+        this.color = color || (isOriginal ? "#ff4444" : "#009dff");
     }
     eq(other: PhantomWidget) {
-        return other.text === this.text && other.color === this.color && other.annoId === this.annoId;
+        return other.text === this.text && other.color === this.color && other.annoId === this.annoId && other.isOriginal === this.isOriginal;
     }
     toDOM() {
         const span = document.createElement("span");
-        span.className = "annotation-phantom";
-        span.textContent = this.text;
-        span.style.color = this.color;
-        span.style.borderBottomColor = this.color;
-        span.style.backgroundColor = hexToRgba(this.color, 0.15);
 
-        // ✨ 修改核心逻辑：将 onclick 改为 onmousedown！
-        // 在光标发生移动、排版发生变化之前，抢先一步向系统宣誓主权！
+        if (this.isOriginal) {
+            // ✨ 渲染原文本：保留高亮样式，但变成不可编辑的块
+            span.className = "annotation-highlight annotation-protected-block";
+            span.style.backgroundColor = hexToRgba(this.color, 0.25);
+            span.style.borderBottom = `2px solid ${this.color}`;
+        } else {
+            // 渲染变体分支：幻影样式
+            span.className = "annotation-phantom";
+            span.style.color = this.color;
+            span.style.borderBottomColor = this.color;
+            span.style.backgroundColor = hexToRgba(this.color, 0.15);
+        }
+
+        span.textContent = this.text;
+
+        // 鼠标点击抢夺焦点，触发侧边栏展开
         span.onmousedown = () => {
             const event = new CustomEvent('footnote-compass-expand-card', { detail: { annoId: this.annoId } });
             window.dispatchEvent(event);
@@ -219,7 +228,10 @@ const annotationField = StateField.define<DecorationSet>({
         }
         return decos;
     },
-    provide: f => EditorView.decorations.from(f)
+    provide: f => [
+        EditorView.decorations.from(f),
+        EditorView.atomicRanges.of(view => view.state.field(f))
+    ]
 });
 
 function createAnnotationDecorations(view: EditorView, annotations: Annotation[], plugin: FootnoteCompassPlugin): DecorationSet {
@@ -242,15 +254,16 @@ function createAnnotationDecorations(view: EditorView, annotations: Annotation[]
         const pColor = anno.phantomColor || plugin.settings.defaultPhantomColor;
         const checkedComment = (anno.comments || []).find(c => c.checked);
 
+        // ✨ 重构：无论是变体还是原文本，全部使用 Replace 变成不可编辑的保护块！
         if (checkedComment) {
             decos.push({
                 from: match.start, to: match.end,
-                deco: Decoration.replace({ widget: new PhantomWidget(checkedComment.text, pColor, anno.id), inclusive: false })
+                deco: Decoration.replace({ widget: new PhantomWidget(checkedComment.text, pColor, anno.id, false), inclusive: false })
             });
         } else {
             decos.push({
                 from: match.start, to: match.end,
-                deco: Decoration.mark({ class: "annotation-highlight", attributes: { style: `background-color: ${hexToRgba(hColor, 0.25)}; border-bottom-color: ${hColor};` } })
+                deco: Decoration.replace({ widget: new PhantomWidget(anno.original, hColor, anno.id, true), inclusive: false })
             });
         }
     });
@@ -1175,44 +1188,34 @@ class FootnoteListView extends ItemView {
                             });
                         });
 
-
-                        // ✨ 新增：紧接着在下面加上这一段：
+                        // ✨ 图标相关
                         menu.addItem((item) => {
                             item.setTitle("添加图标").setIcon("smile-plus").onClick(() => {
                                 new IconGridModal(this.plugin, async (iconName) => {
-                                    anno.icon = iconName; // 保存选中的图标
+                                    anno.icon = iconName;
                                     await this.plugin.annoManager.save();
                                     this._lastStateHash = "";
-                                    this.checkAndUpdate(); // 刷新界面
+                                    this.checkAndUpdate();
                                 }).open();
                             });
 
-
-                            // ✨ 新增：如果当前已经有图标，就多加一个“删除图标”选项
                             if (anno.icon) {
                                 menu.addItem((item) => {
                                     item.setTitle("删除图标").setIcon("eraser").onClick(async () => {
-                                        delete anno.icon; // 清除图标数据
+                                        delete anno.icon;
                                         await this.plugin.annoManager.save();
                                         this._lastStateHash = "";
-                                        this.checkAndUpdate(); // 刷新界面
+                                        this.checkAndUpdate();
                                     });
                                 });
                             }
                         });
 
-
-
                         menu.addSeparator();
                         menu.addItem((item) => {
                             item.setTitle("修改标注颜色").setIcon("highlighter").onClick(() => {
                                 new ColorPickerModal(this.app, "选择标注高亮颜色", palette, async (c) => {
-                                    // ✨ 修改：如果有颜色就赋值，如果是 null 就删掉该属性(恢复默认)
-                                    if (c) {
-                                        anno.highlightColor = c;
-                                    } else {
-                                        delete anno.highlightColor;
-                                    }
+                                    if (c) { anno.highlightColor = c; } else { delete anno.highlightColor; }
                                     await this.plugin.annoManager.save();
                                     updateEditorDecorations(this.plugin); this._lastStateHash = ""; this.checkAndUpdate();
                                 }).open();
@@ -1222,12 +1225,7 @@ class FootnoteListView extends ItemView {
                         menu.addItem((item) => {
                             item.setTitle("修改分支颜色").setIcon("paintbrush").onClick(() => {
                                 new ColorPickerModal(this.app, "选择分支颜色", palette, async (c) => {
-                                    // ✨ 修改：同理，null 时删掉属性
-                                    if (c) {
-                                        anno.phantomColor = c;
-                                    } else {
-                                        delete anno.phantomColor;
-                                    }
+                                    if (c) { anno.phantomColor = c; } else { delete anno.phantomColor; }
                                     await this.plugin.annoManager.save();
                                     updateEditorDecorations(this.plugin); this._lastStateHash = ""; this.checkAndUpdate();
                                 }).open();
@@ -1235,36 +1233,42 @@ class FootnoteListView extends ItemView {
                         });
                         menu.addSeparator();
 
+                        // ✨ 重构：修改原文本 (严密作用域，不会报错)
                         menu.addItem((item) => {
-                            item.setTitle("重新选择文本").setIcon("text-cursor").onClick(async () => {
+                            item.setTitle("修改原文本").setIcon("pencil").onClick(async () => {
                                 const view = this.lastActiveView;
                                 if (!view || !view.editor) return;
-                                const editor = view.editor;
-                                const selectedText = editor.getSelection();
-                                if (!selectedText || selectedText.trim().length === 0) {
-                                    new Notice("⚠️ 替换提示：\n请先在正文中【选中一段新文本】，然后再来点击此选项！", 4000);
-                                    return;
-                                }
 
-                                // ✨ 新增：防止跨行选择导致上下文计算崩溃
-                                const cursorFrom = editor.getCursor('from');
-                                const cursorTo = editor.getCursor('to');
-                                if (cursorFrom.line !== cursorTo.line) {
-                                    new Notice("⚠️ 暂不支持跨行重新绑定文本，请在同一段落内选择！");
-                                    return;
-                                }
+                                new CommentModal(this.app, "修改标注原文本", anno.original, async (newText) => {
+                                    if (!newText || newText === anno.original) return;
 
-                                const cursor = editor.getCursor('from');
-                                const lineText = editor.getLine(cursor.line);
-                                anno.original = selectedText;
-                                // ✨ 同步修复重新选择文本的上下文长度
-                                anno.prefix = lineText.substring(Math.max(0, cursor.ch - 30), cursor.ch);
-                                anno.suffix = lineText.substring(cursor.ch + selectedText.length, cursor.ch + selectedText.length + 30);
-                                anno.expectedOffset = editor.posToOffset(cursor);
-                                await this.plugin.annoManager.save();
-                                updateEditorDecorations(this.plugin);
-                                this._lastStateHash = ""; this.checkAndUpdate();
-                                new Notice(`✅ 绑定的原文本已成功修改为：\n"${selectedText}"`);
+                                    const editor = view.editor;
+                                    const fullText = editor.getValue();
+
+                                    const match = findAnnotationOffsetAndHeal(fullText, anno);
+                                    if (!match) {
+                                        new Notice("⚠️ 无法在正文中定位原文本，请确保文本未被破坏！");
+                                        return;
+                                    }
+
+                                    const fromPos = editor.offsetToPos(match.start);
+                                    const toPos = editor.offsetToPos(match.end);
+                                    editor.replaceRange(newText, fromPos, toPos);
+
+                                    const cursor = editor.offsetToPos(match.start);
+                                    const lineText = editor.getLine(cursor.line);
+                                    anno.original = newText;
+
+                                    anno.prefix = lineText.substring(Math.max(0, cursor.ch - 30), cursor.ch);
+                                    anno.suffix = lineText.substring(cursor.ch + newText.length, cursor.ch + newText.length + 30);
+                                    anno.expectedOffset = match.start;
+
+                                    await this.plugin.annoManager.save();
+                                    updateEditorDecorations(this.plugin);
+                                    this._lastStateHash = "";
+                                    this.checkAndUpdate();
+                                    new Notice(`✅ 原文本已成功修改为：\n"${newText}"`);
+                                }).open();
                             });
                         });
 
@@ -1278,7 +1282,7 @@ class FootnoteListView extends ItemView {
                             });
                         });
                         menu.showAtMouseEvent(e);
-                    };
+                    }; // 👈 右键菜单完整结束块
 
                     const header = card.createDiv({ cls: "annotation-header" });
 
@@ -1289,16 +1293,16 @@ class FootnoteListView extends ItemView {
                     const variantText = checkedComment ? checkedComment.text : "无";
 
                     // ✨ 修复：加上 flex: 1 和 min-width: 0，让长文字能够乖乖被截断并显示 "..."
-                    const titleWrapper = header.createDiv({ 
-                        cls: "anno-title-wrapper", 
-                        attr: { style: "display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;" } 
+                    const titleWrapper = header.createDiv({
+                        cls: "anno-title-wrapper",
+                        attr: { style: "display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;" }
                     });
 
                     if (anno.icon) {
                         const iconSpan = titleWrapper.createSpan({ cls: "anno-icon" });
                         iconSpan.style.flexShrink = "0"; // ✨ 保护机制：文字再长也绝对不能去挤压图标
                         setIcon(iconSpan, anno.icon); // 恢复默认颜色
-                        
+
                         // 读取你的设置，并通过 relative 定位实现垂直微调
                         const offset = this.plugin.settings.iconOffsetY || 0;
                         if (offset !== 0) {
