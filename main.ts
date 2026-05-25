@@ -342,8 +342,8 @@ class AnnotationManager {
                 await this.plugin.app.vault.process(file, (data) => {
                     const regexNew = /<!-- FC_DATA_START -->\r?\n```json\r?\n([\s\S]*?)\r?\n```\r?\n<!-- FC_DATA_END -->/;
                     const regexOld = /```json\r?\n([\s\S]*?)\r?\n```/;
-                    if (data.match(regexNew)) return data.replace(regexNew, newBlock);
-                    if (data.match(regexOld)) return data.replace(regexOld, newBlock);
+                    if (data.match(regexNew)) return data.replace(regexNew, () => newBlock);
+                    if (data.match(regexOld)) return data.replace(regexOld, () => newBlock);
                     if (data.trim().length === 0) return defaultContent;
                     else return data.replace(/\s+$/, "") + "\n\n" + newBlock + "\n";
                 });
@@ -906,7 +906,7 @@ class FootnoteListView extends ItemView {
                 };
 
                 // --- 3. 自动展开 开启/关闭 按钮 (新增) ---
-                const isAutoExpand = this.plugin.settings.autoExpands[filePath] !== false; 
+                const isAutoExpand = this.plugin.settings.autoExpands[filePath] !== false;
                 if (this.listRoot) this.listRoot.dataset.autoExpand = isAutoExpand ? "true" : "false";
 
                 const autoExpandBtn = rightControls.createEl("button", {
@@ -928,7 +928,7 @@ class FootnoteListView extends ItemView {
                         if (this.lastActiveView) this.checkAndUpdate();
                     };
                 }
-                
+
                 autoExpandBtn.onclick = async () => {
                     this.plugin.settings.autoExpands[filePath] = !isAutoExpand;
                     await this.plugin.saveSettings();
@@ -1101,6 +1101,15 @@ class FootnoteListView extends ItemView {
                                     new Notice("⚠️ 替换提示：\n请先在正文中【选中一段新文本】，然后再来点击此选项！", 4000);
                                     return;
                                 }
+
+                                // ✨ 新增：防止跨行选择导致上下文计算崩溃
+                                const cursorFrom = editor.getCursor('from');
+                                const cursorTo = editor.getCursor('to');
+                                if (cursorFrom.line !== cursorTo.line) {
+                                    new Notice("⚠️ 暂不支持跨行重新绑定文本，请在同一段落内选择！");
+                                    return;
+                                }
+
                                 const cursor = editor.getCursor('from');
                                 const lineText = editor.getLine(cursor.line);
                                 anno.original = selectedText;

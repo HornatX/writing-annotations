@@ -254,8 +254,8 @@ ${newBlock}
         await this.plugin.app.vault.process(file, (data) => {
           const regexNew = /<!-- FC_DATA_START -->\r?\n```json\r?\n([\s\S]*?)\r?\n```\r?\n<!-- FC_DATA_END -->/;
           const regexOld = /```json\r?\n([\s\S]*?)\r?\n```/;
-          if (data.match(regexNew)) return data.replace(regexNew, newBlock);
-          if (data.match(regexOld)) return data.replace(regexOld, newBlock);
+          if (data.match(regexNew)) return data.replace(regexNew, () => newBlock);
+          if (data.match(regexOld)) return data.replace(regexOld, () => newBlock);
           if (data.trim().length === 0) return defaultContent;
           else return data.replace(/\s+$/, "") + "\n\n" + newBlock + "\n";
         });
@@ -889,6 +889,12 @@ var FootnoteListView = class extends import_obsidian.ItemView {
                 const selectedText = editor.getSelection();
                 if (!selectedText || selectedText.trim().length === 0) {
                   new import_obsidian.Notice("\u26A0\uFE0F \u66FF\u6362\u63D0\u793A\uFF1A\n\u8BF7\u5148\u5728\u6B63\u6587\u4E2D\u3010\u9009\u4E2D\u4E00\u6BB5\u65B0\u6587\u672C\u3011\uFF0C\u7136\u540E\u518D\u6765\u70B9\u51FB\u6B64\u9009\u9879\uFF01", 4e3);
+                  return;
+                }
+                const cursorFrom = editor.getCursor("from");
+                const cursorTo = editor.getCursor("to");
+                if (cursorFrom.line !== cursorTo.line) {
+                  new import_obsidian.Notice("\u26A0\uFE0F \u6682\u4E0D\u652F\u6301\u8DE8\u884C\u91CD\u65B0\u7ED1\u5B9A\u6587\u672C\uFF0C\u8BF7\u5728\u540C\u4E00\u6BB5\u843D\u5185\u9009\u62E9\uFF01");
                   return;
                 }
                 const cursor = editor.getCursor("from");
