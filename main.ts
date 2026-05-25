@@ -4,7 +4,7 @@ import {
     PluginSettingTab, TFile, TFolder, Notice, AbstractInputSuggest, normalizePath,
     WorkspaceLeaf, MarkdownView, FuzzySuggestModal, getIconIds
 } from 'obsidian';
-import { RangeSetBuilder, StateField, StateEffect, Transaction } from "@codemirror/state";
+import { RangeSetBuilder, StateField, StateEffect, Transaction, EditorState } from "@codemirror/state";
 import { Decoration, DecorationSet, WidgetType, EditorView } from "@codemirror/view";
 
 const VIEW_TYPE_FOOTNOTE = "footnote-compass-view";
@@ -38,6 +38,7 @@ export interface FootnoteCompassSettings {
     recentIcons: string[]; // ✨ 新增：保存最近使用的图标
 
     iconOffsetY: number;       // ✨ 新增：图标向下微调的值
+    lockDeletion: boolean; // ✨ 新增：锁定删除保护
 
 }
 
@@ -233,6 +234,39 @@ const annotationField = StateField.define<DecorationSet>({
         EditorView.atomicRanges.of(view => view.state.field(f))
     ]
 });
+
+
+// ✨ 新增：CM6 最高优先级拦截器（防删改）
+function createDeletionLockExtension(plugin: FootnoteCompassPlugin) {
+    return EditorState.transactionFilter.of(tr => {
+        if (!tr.docChanged) return tr; // 如果没改文本（比如只是鼠标动了），直接放行
+        if (!plugin.settings.lockDeletion) return tr; // 如果设置里关了，直接放行
+        if (plugin.isPluginModifying) return tr; // ✨ 特权放行：如果是插件自己在改原文，放行
+
+        // 获取当前所有的保护区域
+        const decos = tr.startState.field(annotationField, false);
+        if (!decos) return tr;
+
+        let blocked = false;
+        tr.changes.iterChanges((fromA, toA) => {
+            // 只要涉及到删除或覆盖 (fromA < toA)
+            if (fromA < toA) {
+                decos.between(fromA, toA, (from, to) => {
+                    // 判断是否真的发生了交叉碰撞（而不是仅仅贴着边缘打字）
+                    if (Math.max(fromA, from) < Math.min(toA, to)) {
+                        blocked = true;
+                    }
+                });
+            }
+        });
+
+        if (blocked) {
+            new Notice("⚠️ 锁定保护：请先在侧边栏右键「移除整个标注」，然后再删除！");
+            return []; // 🚨 核心惩罚：没收并取消这次操作
+        }
+        return tr;
+    });
+}
 
 function createAnnotationDecorations(view: EditorView, annotations: Annotation[], plugin: FootnoteCompassPlugin): DecorationSet {
     const builder = new RangeSetBuilder<Decoration>();
@@ -1253,7 +1287,9 @@ class FootnoteListView extends ItemView {
 
                                     const fromPos = editor.offsetToPos(match.start);
                                     const toPos = editor.offsetToPos(match.end);
+                                    this.plugin.isPluginModifying = true; // ✨ 开启特权
                                     editor.replaceRange(newText, fromPos, toPos);
+                                    this.plugin.isPluginModifying = false; // ✨ 立即关闭特权
 
                                     const cursor = editor.offsetToPos(match.start);
                                     const lineText = editor.getLine(cursor.line);
@@ -1586,6 +1622,18 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
                     await this.plugin.annoManager.load();
                 });
             });
+
+        // 把这段加在“标注数据存储文件”下方
+        new Setting(containerEl)
+            .setName("锁定删除保护")
+            .setDesc("开启后，被标注的原文将变为不可删除的受保护状态。如需删除，必须先在侧边栏右键菜单中解除标注。（强烈建议开启，防止误删导致数据断联）")
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.lockDeletion)
+                .onChange(async (val) => {
+                    this.plugin.settings.lockDeletion = val;
+                    await this.plugin.saveSettings();
+                })
+            );
 
         containerEl.createEl("h3", { text: "全局默认颜色设置", cls: "setting-section-header" });
         this.createColorSetting(containerEl, "默认原文本高亮颜色", "当创建新变体时，正文中被圈定的原词高亮颜色。", 'defaultHighlightColor');
@@ -1921,6 +1969,8 @@ export default class FootnoteCompassPlugin extends Plugin {
     settings: FootnoteCompassSettings;
     annoManager: AnnotationManager;
 
+    isPluginModifying: boolean = false; // ✨ 新增：特权修改通道标志
+
     async onload() {
         const defaultPresets: ColorPreset[] = [
             { name: "红色", hex: "#e57373" }, { name: "黄色", hex: "#ffb74d" }, { name: "绿色", hex: "#81c784" },
@@ -1929,6 +1979,7 @@ export default class FootnoteCompassPlugin extends Plugin {
 
         let loadedData = await this.loadData();
         this.settings = Object.assign({
+            lockDeletion: true, // ✨ 新增：默认开启删除保护
             beautifyEnabled: false, isSortByKey: false, isAnnotationsCollapsed: true, annotationFilePath: "大纲变体标注数据库.md",
             defaultHighlightColor: "#ff4444", defaultPhantomColor: "#009dff", colorPresets: defaultPresets,
             headingFilters: {},
@@ -1946,7 +1997,7 @@ export default class FootnoteCompassPlugin extends Plugin {
 
         this.annoManager = new AnnotationManager(this);
         this.addSettingTab(new FootnoteCompassSettingTab(this.app, this));
-        this.registerEditorExtension([annotationField]);
+        this.registerEditorExtension([annotationField, createDeletionLockExtension(this)]);
         this.registerView(VIEW_TYPE_FOOTNOTE, (leaf) => new FootnoteListView(leaf, this));
         this.addRibbonIcon('message-circle-more', '打开脚注与标注面板', () => { this.activateView(); });
 

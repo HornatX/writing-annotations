@@ -156,6 +156,30 @@ var annotationField = import_state.StateField.define({
     import_view.EditorView.atomicRanges.of((view) => view.state.field(f))
   ]
 });
+function createDeletionLockExtension(plugin) {
+  return import_state.EditorState.transactionFilter.of((tr) => {
+    if (!tr.docChanged) return tr;
+    if (!plugin.settings.lockDeletion) return tr;
+    if (plugin.isPluginModifying) return tr;
+    const decos = tr.startState.field(annotationField, false);
+    if (!decos) return tr;
+    let blocked = false;
+    tr.changes.iterChanges((fromA, toA) => {
+      if (fromA < toA) {
+        decos.between(fromA, toA, (from, to) => {
+          if (Math.max(fromA, from) < Math.min(toA, to)) {
+            blocked = true;
+          }
+        });
+      }
+    });
+    if (blocked) {
+      new import_obsidian.Notice("\u26A0\uFE0F \u9501\u5B9A\u4FDD\u62A4\uFF1A\u8BF7\u5148\u5728\u4FA7\u8FB9\u680F\u53F3\u952E\u300C\u79FB\u9664\u6574\u4E2A\u6807\u6CE8\u300D\uFF0C\u7136\u540E\u518D\u5220\u9664\uFF01");
+      return [];
+    }
+    return tr;
+  });
+}
 function createAnnotationDecorations(view, annotations, plugin) {
   const builder = new import_state.RangeSetBuilder();
   const text = view.state.doc.toString();
@@ -992,7 +1016,9 @@ var FootnoteListView = class extends import_obsidian.ItemView {
                   }
                   const fromPos = editor.offsetToPos(match.start);
                   const toPos = editor.offsetToPos(match.end);
+                  this.plugin.isPluginModifying = true;
                   editor.replaceRange(newText, fromPos, toPos);
+                  this.plugin.isPluginModifying = false;
                   const cursor = editor.offsetToPos(match.start);
                   const lineText = editor.getLine(cursor.line);
                   anno.original = newText;
@@ -1273,6 +1299,12 @@ var FootnoteCompassSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.annoManager.load();
       });
     });
+    new import_obsidian.Setting(containerEl).setName("\u9501\u5B9A\u5220\u9664\u4FDD\u62A4").setDesc("\u5F00\u542F\u540E\uFF0C\u88AB\u6807\u6CE8\u7684\u539F\u6587\u5C06\u53D8\u4E3A\u4E0D\u53EF\u5220\u9664\u7684\u53D7\u4FDD\u62A4\u72B6\u6001\u3002\u5982\u9700\u5220\u9664\uFF0C\u5FC5\u987B\u5148\u5728\u4FA7\u8FB9\u680F\u53F3\u952E\u83DC\u5355\u4E2D\u89E3\u9664\u6807\u6CE8\u3002\uFF08\u5F3A\u70C8\u5EFA\u8BAE\u5F00\u542F\uFF0C\u9632\u6B62\u8BEF\u5220\u5BFC\u81F4\u6570\u636E\u65AD\u8054\uFF09").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.lockDeletion).onChange(async (val) => {
+        this.plugin.settings.lockDeletion = val;
+        await this.plugin.saveSettings();
+      })
+    );
     containerEl.createEl("h3", { text: "\u5168\u5C40\u9ED8\u8BA4\u989C\u8272\u8BBE\u7F6E", cls: "setting-section-header" });
     this.createColorSetting(containerEl, "\u9ED8\u8BA4\u539F\u6587\u672C\u9AD8\u4EAE\u989C\u8272", "\u5F53\u521B\u5EFA\u65B0\u53D8\u4F53\u65F6\uFF0C\u6B63\u6587\u4E2D\u88AB\u5708\u5B9A\u7684\u539F\u8BCD\u9AD8\u4EAE\u989C\u8272\u3002", "defaultHighlightColor");
     this.createColorSetting(containerEl, "\u9ED8\u8BA4\u66FF\u6362\u540E\u53D8\u4F53\u989C\u8272", "\u5728\u6B63\u6587\u4E2D\u66FF\u6362\u6210\u53D8\u4F53\u6587\u5B57\u540E\u7684\u6587\u5B57\u548C\u8FB9\u6846\u989C\u8272\u3002", "defaultPhantomColor");
@@ -1518,6 +1550,11 @@ var FootnoteCompassSettingTab = class extends import_obsidian.PluginSettingTab {
   }
 };
 var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
+  constructor() {
+    super(...arguments);
+    this.isPluginModifying = false;
+  }
+  // ✨ 新增：特权修改通道标志
   async onload() {
     const defaultPresets = [
       { name: "\u7EA2\u8272", hex: "#e57373" },
@@ -1529,6 +1566,8 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
     ];
     let loadedData = await this.loadData();
     this.settings = Object.assign({
+      lockDeletion: true,
+      // ✨ 新增：默认开启删除保护
       beautifyEnabled: false,
       isSortByKey: false,
       isAnnotationsCollapsed: true,
@@ -1556,7 +1595,7 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
     }, loadedData);
     this.annoManager = new AnnotationManager(this);
     this.addSettingTab(new FootnoteCompassSettingTab(this.app, this));
-    this.registerEditorExtension([annotationField]);
+    this.registerEditorExtension([annotationField, createDeletionLockExtension(this)]);
     this.registerView(VIEW_TYPE_FOOTNOTE, (leaf) => new FootnoteListView(leaf, this));
     this.addRibbonIcon("message-circle-more", "\u6253\u5F00\u811A\u6CE8\u4E0E\u6807\u6CE8\u9762\u677F", () => {
       this.activateView();
