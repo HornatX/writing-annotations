@@ -445,6 +445,10 @@ var RelinkModal = class extends import_obsidian.Modal {
           }
           if (this.plugin.settings.displayModes[this.oldPath]) {
             this.plugin.settings.displayModes[file.path] = this.plugin.settings.displayModes[this.oldPath];
+            if (this.plugin.settings.autoExpands[this.oldPath] !== void 0) {
+              this.plugin.settings.autoExpands[file.path] = this.plugin.settings.autoExpands[this.oldPath];
+              delete this.plugin.settings.autoExpands[this.oldPath];
+            }
             delete this.plugin.settings.displayModes[this.oldPath];
           }
           await this.plugin.annoManager.save();
@@ -696,7 +700,7 @@ var FootnoteListView = class extends import_obsidian.ItemView {
         };
         const displayModeStr = this.plugin.settings.displayModes[filePath] || "original";
         if (this.listRoot) this.listRoot.dataset.displayMode = displayModeStr;
-        const modeMap = { "original": "\u6807\u9898", "variant": "\u5206\u652F", "both": "\u540C\u65F6", "closed": "\u5173\u95ED" };
+        const modeMap = { "original": "\u6807\u9898", "variant": "\u5206\u652F", "both": "\u540C\u65F6" };
         const displayModeBtn = rightControls.createEl("button", {
           text: `${modeMap[displayModeStr]} \u25BE`,
           cls: "compass-ui-btn"
@@ -718,6 +722,31 @@ var FootnoteListView = class extends import_obsidian.ItemView {
             });
           });
           menu.showAtMouseEvent(e);
+        };
+        const isAutoExpand = this.plugin.settings.autoExpands[filePath] !== false;
+        if (this.listRoot) this.listRoot.dataset.autoExpand = isAutoExpand ? "true" : "false";
+        const autoExpandBtn = rightControls.createEl("button", {
+          text: isAutoExpand ? "\u5F00\u542F" : "\u5173\u95ED",
+          cls: "compass-ui-btn"
+        });
+        if (!isCollapsed) {
+          autoExpandBtn.disabled = true;
+          autoExpandBtn.style.opacity = "0.4";
+          autoExpandBtn.style.cursor = "not-allowed";
+          autoExpandBtn.title = "\u5168\u5C40\u5C55\u5F00\u72B6\u6001\u4E0B\u65E0\u9700\u6B64\u529F\u80FD";
+        } else {
+          autoExpandBtn.onclick = async () => {
+            this.plugin.settings.autoExpands[filePath] = !isAutoExpand;
+            await this.plugin.saveSettings();
+            this._lastStateHash = "";
+            if (this.lastActiveView) this.checkAndUpdate();
+          };
+        }
+        autoExpandBtn.onclick = async () => {
+          this.plugin.settings.autoExpands[filePath] = !isAutoExpand;
+          await this.plugin.saveSettings();
+          this._lastStateHash = "";
+          if (this.lastActiveView) this.checkAndUpdate();
         };
         const toggleBtn = rightControls.createEl("button", {
           text: isCollapsed ? "\u5C55\u5F00" : "\u6298\u53E0",
@@ -781,7 +810,7 @@ var FootnoteListView = class extends import_obsidian.ItemView {
           const pColor = anno.phantomColor || this.plugin.settings.defaultPhantomColor;
           card.onclick = () => {
             this._lockedActiveId = anno.id;
-            if (displayModeStr === "closed") {
+            if (!isAutoExpand) {
               const wasExpanded = card.classList.contains("force-expand");
               this.listRoot?.querySelectorAll(".annotation-card.force-expand").forEach((el) => el.classList.remove("force-expand"));
               if (!wasExpanded) {
@@ -1003,8 +1032,7 @@ var FootnoteListView = class extends import_obsidian.ItemView {
           this._lockedActiveId = null;
         }
       }
-      const displayModeStr = this.plugin.settings.displayModes[view.file?.path || ""] || "original";
-      const isClosedMode = displayModeStr === "closed";
+      const isClosedMode = this.plugin.settings.autoExpands[view.file?.path || ""] === false;
       if (isClosedMode && !this.isNavigating && this._forceExpandedCardId !== null && this._lockedActiveId === null) {
         const oldExpanded = this.listRoot.querySelector(`.annotation-card[data-anno-id="${this._forceExpandedCardId}"]`);
         if (oldExpanded) oldExpanded.classList.remove("force-expand");
@@ -1378,7 +1406,8 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
       colorPresets: defaultPresets,
       headingFilters: {},
       displayModes: {},
-      // ✨ 新增：默认值
+      autoExpands: {},
+      // ✨ 新增：默认值// ✨ 新增：默认值
       headingColor: "#2196f3",
       // 新增：默认标题颜色（蓝色）
       flashingColor: "#EEE7DD",
@@ -1414,6 +1443,11 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
     this.registerEvent(this.app.vault.on("rename", async (file, oldPath) => {
       let hasChanges = false;
       if (file instanceof import_obsidian.TFile && file.extension === "md") {
+        if (this.settings.autoExpands[oldPath] !== void 0) {
+          this.settings.autoExpands[file.path] = this.settings.autoExpands[oldPath];
+          delete this.settings.autoExpands[oldPath];
+          hasChanges = true;
+        }
         if (this.annoManager.data[oldPath]) {
           this.annoManager.data[file.path] = this.annoManager.data[oldPath];
           delete this.annoManager.data[oldPath];
@@ -1432,6 +1466,14 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
       } else if (file instanceof import_obsidian.TFolder) {
         const oldPrefix = oldPath + "/";
         const newPrefix = file.path + "/";
+        Object.keys(this.settings.autoExpands).forEach((key) => {
+          if (key.startsWith(oldPrefix)) {
+            const newKey = key.replace(oldPrefix, newPrefix);
+            this.settings.autoExpands[newKey] = this.settings.autoExpands[key];
+            delete this.settings.autoExpands[key];
+            hasChanges = true;
+          }
+        });
         Object.keys(this.annoManager.data).forEach((key) => {
           if (key.startsWith(oldPrefix)) {
             const newKey = key.replace(oldPrefix, newPrefix);

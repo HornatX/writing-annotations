@@ -66,7 +66,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     color: var(--text-muted);
-    font-size: 18px; /* 👈 移除了变量，改回 18px */
+    font-size: 18px;
+    /* 👈 移除了变量，改回 18px */
     line-height: 1.5;
 }
 
@@ -230,11 +231,11 @@
 .annotation-checkbox:checked {
     -webkit-appearance: none;
     appearance: none;
-    background: transparent ;
+    background: transparent;
     box-shadow: none;
     outline: none;
-    width: 16px ;
-    height: 16px ;
+    width: 16px;
+    height: 16px;
     padding: 0;
     box-sizing: border-box;
     border-radius: 50%;
@@ -246,7 +247,7 @@
 
 .annotation-checkbox::after,
 .annotation-checkbox:checked::after {
-    display: none ;
+    display: none;
 }
 
 .annotation-checkbox:checked {
@@ -274,7 +275,8 @@
 
 .annotation-comment-text {
     flex: 1;
-    font-size: 16px; /* 👈 移除了变量，改回 16px */
+    font-size: 16px;
+    /* 👈 移除了变量，改回 16px */
     line-height: 1.4;
     color: var(--text-muted);
     user-select: none;
@@ -427,7 +429,7 @@
 
 
 .annotation-toggle-btn:hover {
-    color: var(--text-normal) ;
+    color: var(--text-normal);
     /* 鼠标悬停时变亮 */
 }
 
@@ -458,7 +460,7 @@
 }
 
 .annotation-group-wrapper .annotation-card {
-    border-bottom: none ;
+    border-bottom: none;
     /* 隐藏内部卡片的横分割线 */
 }
 
@@ -488,11 +490,11 @@
    自定义修正：解决文字位移
    ========================================= */
 .annotation-comment-row .annotation-comment-text {
-    font-weight: normal ;
+    font-weight: normal;
 }
 
 .annotation-comment-row .annotation-comment-text[style*="font-weight: bold"] {
-    font-weight: normal ;
+    font-weight: normal;
     -webkit-text-stroke: 0.35px currentColor;
     /* 模拟加粗且不改变宽度 */
 }
@@ -519,57 +521,81 @@
    控制栏按钮样式 (极致极简)
    ========================================= */
 .compass-ui-btn {
-    background: transparent ;
-    border: none ;
-    box-shadow: none ;
-    padding: 2px 6px ;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 2px 6px !important;
     border-radius: 4px;
     font-size: 13px;
     color: var(--text-muted);
     cursor: pointer;
     outline: none;
     transition: all 0.15s ease;
+
+    /* ✨ 修复1：强制使用弹性盒子并固定高度，抹平带有“▾”文字引起的基线偏移 */
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    height: 24px;
+    line-height: 1;
 }
 
 .compass-ui-btn:hover {
-    color: var(--text-normal) ;
-    background-color: var(--background-modifier-hover) ;
+    color: var(--text-normal);
+    background-color: var(--background-modifier-hover);
 }
 
 /* =========================================
-   折叠模式动态标题切换机制
+   折叠模式动态标题切换机制 (完美匹配展开与开启/关闭状态)
    ========================================= */
 .anno-title-text {
     display: none;
     font-size: 18px;
-    color: var(--text-normal) ;
+    color: var(--text-normal);
     padding: 2px 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-
 }
 
+/* 默认回退：显示原标题 (当下方展开了详细列表时，顶部统一退回原标题) */
 .anno-text-original {
     display: block;
 }
 
-.annotations-collapsed-mode .annotation-card:not(.is-active) .annotation-header[data-display-mode="variant"] .anno-text-original {
+/* ✨ 修复3核心：当【开启】自动展开时，跟随滚动(is-active)或者手动点击，都会展示原标题，其余情况显示变体/同时 */
+.footnote-list-root[data-auto-expand="true"].annotations-collapsed-mode .annotation-card:not(.is-active) .annotation-header[data-display-mode="variant"] .anno-text-original {
     display: none;
 }
 
-.annotations-collapsed-mode .annotation-card:not(.is-active) .annotation-header[data-display-mode="variant"] .anno-text-variant {
+.footnote-list-root[data-auto-expand="true"].annotations-collapsed-mode .annotation-card:not(.is-active) .annotation-header[data-display-mode="variant"] .anno-text-variant {
     display: block;
 }
 
-.annotations-collapsed-mode .annotation-card:not(.is-active) .annotation-header[data-display-mode="both"] .anno-text-original {
+.footnote-list-root[data-auto-expand="true"].annotations-collapsed-mode .annotation-card:not(.is-active) .annotation-header[data-display-mode="both"] .anno-text-original {
     display: none;
 }
 
-.annotations-collapsed-mode .annotation-card:not(.is-active) .annotation-header[data-display-mode="both"] .anno-text-both {
+.footnote-list-root[data-auto-expand="true"].annotations-collapsed-mode .annotation-card:not(.is-active) .annotation-header[data-display-mode="both"] .anno-text-both {
     display: block;
 }
 
+/* ✨ 修复3核心：当【关闭】自动展开时，滚动(is-active)不再产生影响！只有你真正点击它(force-expand)时才会回退原标题 */
+.footnote-list-root[data-auto-expand="false"].annotations-collapsed-mode .annotation-card:not(.force-expand) .annotation-header[data-display-mode="variant"] .anno-text-original {
+    display: none;
+}
+
+.footnote-list-root[data-auto-expand="false"].annotations-collapsed-mode .annotation-card:not(.force-expand) .annotation-header[data-display-mode="variant"] .anno-text-variant {
+    display: block;
+}
+
+.footnote-list-root[data-auto-expand="false"].annotations-collapsed-mode .annotation-card:not(.force-expand) .annotation-header[data-display-mode="both"] .anno-text-original {
+    display: none;
+}
+
+.footnote-list-root[data-auto-expand="false"].annotations-collapsed-mode .annotation-card:not(.force-expand) .annotation-header[data-display-mode="both"] .anno-text-both {
+    display: block;
+}
 
 
 
@@ -608,41 +634,46 @@
 }
 
 /* =========================================
-   关闭模式 (Closed Mode) 专属逻辑
+   自动展开 (开启/关闭) 专属逻辑
    ========================================= */
 
-/* 1. 关闭模式下：拦截自动展开（修复选择器层级，去掉空格即可生效） */
-.footnote-list-root.annotations-collapsed-mode[data-display-mode="closed"] .annotation-card:not(.force-expand) .annotation-comments-list {
-    display: none ;
+/* 1. 关闭自动展开时：拦截滚动引发的列表显示，必须用 !important 压制原生逻辑 */
+.footnote-list-root.annotations-collapsed-mode[data-auto-expand="false"] .annotation-card:not(.force-expand) .annotation-comments-list {
+    display: none !important;
 }
 
 /* 保证手动点击强制展开的卡片一定可见 */
-.footnote-list-root.annotations-collapsed-mode[data-display-mode="closed"] .annotation-card.force-expand .annotation-comments-list {
-    display: block ;
+.footnote-list-root.annotations-collapsed-mode[data-auto-expand="false"] .annotation-card.force-expand .annotation-comments-list {
+    display: block !important;
 }
 
-/* 2. 关闭模式下：未展开的卡片底部内边距保持收缩 */
-.footnote-list-root.annotations-collapsed-mode[data-display-mode="closed"] .annotation-card:not(.force-expand) {
-    padding-bottom: 5px ;
+/* 2. 关闭自动展开时：未展开的卡片底部内边距保持收缩 */
+.footnote-list-root.annotations-collapsed-mode[data-auto-expand="false"] .annotation-card:not(.force-expand) {
+    padding-bottom: 5px;
 }
+
+/* 备注：因为“关闭”状态已经与文字排版解绑，
+   现在的文字显示会完美遵循标题/分支/同时的 CSS 规则，无需再写额外的切换代码 */
 
 /* 3. 关闭模式下的专属标题显示逻辑 */
 /* ① 未展开时（不管滚轮是否滚到它，只要没被点击展开）：始终显示“原标题：变体” */
 .annotation-card:not(.force-expand) .annotation-header[data-display-mode="closed"] .anno-text-original,
 .annotation-card:not(.force-expand) .annotation-header[data-display-mode="closed"] .anno-text-variant {
-    display: none ;
+    display: none;
 }
+
 .annotation-card:not(.force-expand) .annotation-header[data-display-mode="closed"] .anno-text-both {
-    display: block ;
+    display: block;
 }
 
 /* ② 展开时（被点击并加上了 force-expand）：隐藏后面的变体，只显示原标题 */
 .annotation-card.force-expand .annotation-header[data-display-mode="closed"] .anno-text-both,
 .annotation-card.force-expand .annotation-header[data-display-mode="closed"] .anno-text-variant {
-    display: none ;
+    display: none;
 }
+
 .annotation-card.force-expand .annotation-header[data-display-mode="closed"] .anno-text-original {
-    display: block ;
+    display: block;
 }
 
 /* =========================================
@@ -651,14 +682,14 @@
 
 /* 卡片整体右键时：深色背景 + 主题色发光边框 */
 .annotation-card.is-context-active {
-    background-color: var(--background-modifier-active-hover) ;
-    border-color: var(--interactive-accent) ;
+    background-color: var(--background-modifier-active-hover);
+    border-color: var(--interactive-accent);
     transition: all 0.1s ease;
 }
 
 /* 子项变体右键时：深色背景包裹 */
 .annotation-comment-row.is-context-active {
-    background-color: var(--background-modifier-active-hover) ;
+    background-color: var(--background-modifier-active-hover);
     transition: all 0.1s ease;
 }
 
@@ -715,7 +746,8 @@
 .db-table {
     display: flex;
     flex-direction: column;
-    gap: 12px; /* 拉开间距，保持呼吸感 */
+    gap: 12px;
+    /* 拉开间距，保持呼吸感 */
 }
 
 /* 完美匹配你的颜色预设气泡圆角 (20px) 和阴影 */
@@ -724,9 +756,9 @@
     align-items: center;
     background-color: var(--background-primary);
     padding: 10px 16px;
-    border-radius: 20px; 
+    border-radius: 20px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-    border: 1px solid transparent; 
+    border: 1px solid transparent;
     transition: border-color 0.2s;
 }
 
@@ -762,15 +794,41 @@
     /* 彻底移除了 font-family: monospace; */
 }
 
-.db-col-status { width: 60px; flex-shrink: 0; color: var(--text-muted); }
-.db-row-missing .db-col-status { color: var(--text-error); font-weight: bold; }
+.db-col-status {
+    width: 60px;
+    flex-shrink: 0;
+    color: var(--text-muted);
+}
 
-.db-col-path { flex-grow: 1; min-width: 150px; color: var(--text-normal); }
-.db-col-count { width: 80px; flex-shrink: 0; text-align: center; color: var(--text-muted); }
-.db-col-action { width: auto; flex-shrink: 0; display: flex; gap: 8px; justify-content: flex-end; }
+.db-row-missing .db-col-status {
+    color: var(--text-error);
+    font-weight: bold;
+}
+
+.db-col-path {
+    flex-grow: 1;
+    min-width: 150px;
+    color: var(--text-normal);
+}
+
+.db-col-count {
+    width: 80px;
+    flex-shrink: 0;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.db-col-action {
+    width: auto;
+    flex-shrink: 0;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
 
 /* 自定义原生风格按钮，避免被主题强制渲染成3D */
-.db-col-action button, .db-section-title-wrapper button {
+.db-col-action button,
+.db-section-title-wrapper button {
     padding: 4px 12px;
     border-radius: 8px;
     font-size: 13px;
@@ -784,8 +842,9 @@
 /* 重新指定按钮 (蓝) */
 .db-btn-relink {
     background-color: var(--interactive-accent);
-    color: var(--text-on-accent) ;
+    color: var(--text-on-accent);
 }
+
 .db-btn-relink:hover {
     background-color: var(--interactive-accent-hover);
 }
@@ -793,18 +852,20 @@
 /* 移至回收区/删除按钮 (灰底红字交互) */
 .db-btn-trash {
     background-color: var(--background-modifier-hover);
-    color: var(--text-muted) ;
+    color: var(--text-muted);
 }
+
 .db-btn-trash:hover {
     background-color: var(--background-modifier-error-hover);
-    color: var(--text-error) ;
+    color: var(--text-error);
 }
 
 /* 恢复按钮 (正常) */
 .db-btn-restore {
     background-color: var(--background-modifier-hover);
-    color: var(--text-normal) ;
+    color: var(--text-normal);
 }
+
 .db-btn-restore:hover {
     background-color: var(--background-modifier-active-hover);
 }
@@ -844,14 +905,14 @@
 
 /* 重新指定按钮 (强行适配主题的主题蓝) */
 button.db-btn-relink {
-    background-color: var(--interactive-accent) ;
-    color: var(--text-on-accent) ;
-    font-weight: 500 ;
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+    font-weight: 500;
 }
 
 button.db-btn-relink:hover {
-    background-color: var(--interactive-accent-hover) ;
-    opacity: 0.9 ;
+    background-color: var(--interactive-accent-hover);
+    opacity: 0.9;
 }
 
 /* =========================================
@@ -907,4 +968,3 @@ button.db-btn-relink:hover {
 .annotation-checkbox:checked::after {
     display: none !important;
 }
-

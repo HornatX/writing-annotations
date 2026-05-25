@@ -25,7 +25,8 @@ export interface FootnoteCompassSettings {
     defaultPhantomColor: string;
     colorPresets: ColorPreset[];
     headingFilters: Record<string, string>; // 新增：保存每个文件的标题过滤偏好
-    displayModes: Record<string, string>; // ✨ 新增：保存每个文件的“标题显示模式”偏好
+    displayModes: Record<string, string>;
+    autoExpands: Record<string, boolean>; // ✨ 新增：保存每个文件的“自动展开开启/关闭”偏好// ✨ 新增：保存每个文件的“标题显示模式”偏好
     headingColor: string; // 新增：侧边栏分类标题颜色
     // 👇 新增以下三个字段
     flashingColor: string;     // 👈 新增：选区高亮颜色
@@ -566,6 +567,12 @@ class RelinkModal extends Modal {
                     }
                     if (this.plugin.settings.displayModes[this.oldPath]) {
                         this.plugin.settings.displayModes[file.path] = this.plugin.settings.displayModes[this.oldPath];
+
+                        if (this.plugin.settings.autoExpands[this.oldPath] !== undefined) {
+                            this.plugin.settings.autoExpands[file.path] = this.plugin.settings.autoExpands[this.oldPath];
+                            delete this.plugin.settings.autoExpands[this.oldPath];
+                        }
+
                         delete this.plugin.settings.displayModes[this.oldPath];
                     }
 
@@ -872,11 +879,10 @@ class FootnoteListView extends ItemView {
                 // --- 2. 显示模式：从原生Select改为优雅的Obsidian官方Menu ---
                 const displayModeStr = this.plugin.settings.displayModes[filePath] || "original";
 
-                // ✨ 新增：给根节点打上当前模式的标记，供 CSS 精准控制
                 if (this.listRoot) this.listRoot.dataset.displayMode = displayModeStr;
 
-                // ✨ 新增：加入了 "closed": "关闭" 选项
-                const modeMap: Record<string, string> = { "original": "标题", "variant": "分支", "both": "同时", "closed": "关闭" };
+                // ✨ 修改：去掉了 "closed": "关闭" 选项，仅保留三种文本显示模式
+                const modeMap: Record<string, string> = { "original": "标题", "variant": "分支", "both": "同时" };
 
                 const displayModeBtn = rightControls.createEl("button", {
                     text: `${modeMap[displayModeStr]} ▾`,
@@ -899,7 +905,38 @@ class FootnoteListView extends ItemView {
                     menu.showAtMouseEvent(e);
                 };
 
-                // --- 3. 折叠/展开按钮 ---
+                // --- 3. 自动展开 开启/关闭 按钮 (新增) ---
+                const isAutoExpand = this.plugin.settings.autoExpands[filePath] !== false; 
+                if (this.listRoot) this.listRoot.dataset.autoExpand = isAutoExpand ? "true" : "false";
+
+                const autoExpandBtn = rightControls.createEl("button", {
+                    text: isAutoExpand ? "开启" : "关闭",
+                    cls: "compass-ui-btn"
+                });
+
+                // ✨ 修复2：如果全局是展开状态，禁用该按钮
+                if (!isCollapsed) {
+                    autoExpandBtn.disabled = true;
+                    autoExpandBtn.style.opacity = "0.4";
+                    autoExpandBtn.style.cursor = "not-allowed";
+                    autoExpandBtn.title = "全局展开状态下无需此功能";
+                } else {
+                    autoExpandBtn.onclick = async () => {
+                        this.plugin.settings.autoExpands[filePath] = !isAutoExpand;
+                        await this.plugin.saveSettings();
+                        this._lastStateHash = "";
+                        if (this.lastActiveView) this.checkAndUpdate();
+                    };
+                }
+                
+                autoExpandBtn.onclick = async () => {
+                    this.plugin.settings.autoExpands[filePath] = !isAutoExpand;
+                    await this.plugin.saveSettings();
+                    this._lastStateHash = "";
+                    if (this.lastActiveView) this.checkAndUpdate();
+                };
+
+                // --- 4. 折叠/展开按钮 ---
                 const toggleBtn = rightControls.createEl("button", {
                     text: isCollapsed ? "展开" : "折叠",
                     cls: "compass-ui-btn"
@@ -975,18 +1012,19 @@ class FootnoteListView extends ItemView {
                     const pColor = anno.phantomColor || this.plugin.settings.defaultPhantomColor;
 
                     card.onclick = () => {
-                        this._lockedActiveId = anno.id; // ✨ 给卡片自身点击上锁
-                        // ✨ 新增逻辑：在关闭模式下，点击卡片切换展开状态（手风琴效果：点一个关其他的）
-                        if (displayModeStr === "closed") {
+                        this._lockedActiveId = anno.id;
+                        // ✨ 修改：判断如果“关闭”了自动展开，则点击卡片触发手风琴展开效果
+                        if (!isAutoExpand) {
                             const wasExpanded = card.classList.contains('force-expand');
                             this.listRoot?.querySelectorAll('.annotation-card.force-expand').forEach(el => el.classList.remove('force-expand'));
                             if (!wasExpanded) {
                                 card.classList.add('force-expand');
-                                this._forceExpandedCardId = anno.id; // 记住被展开的卡片
+                                this._forceExpandedCardId = anno.id;
                             } else {
-                                this._forceExpandedCardId = null;    // 再次点击取消展开
+                                this._forceExpandedCardId = null;
                             }
                         }
+                        // ... 下面光标跳转的代码保持不变
 
                         if (this.lastActiveView?.editor?.offsetToPos && anno._tempOffset! < Number.MAX_SAFE_INTEGER) {
                             this.isNavigating = true;
@@ -1217,9 +1255,8 @@ class FootnoteListView extends ItemView {
                 }
             }
 
-            // 获取当前的显示模式
-            const displayModeStr = this.plugin.settings.displayModes[view.file?.path || ""] || "original";
-            const isClosedMode = displayModeStr === "closed";
+            // ✨ 修改：获取当前的自动展开状态（配置为 false 时就是关闭模式）
+            const isClosedMode = this.plugin.settings.autoExpands[view.file?.path || ""] === false;
 
             // 双保险：若失去锁定，恢复自动关闭
             if (isClosedMode && !this.isNavigating && this._forceExpandedCardId !== null && this._lockedActiveId === null) {
@@ -1696,7 +1733,8 @@ export default class FootnoteCompassPlugin extends Plugin {
             beautifyEnabled: false, isSortByKey: false, isAnnotationsCollapsed: true, annotationFilePath: "大纲变体标注数据库.md",
             defaultHighlightColor: "#ff4444", defaultPhantomColor: "#009dff", colorPresets: defaultPresets,
             headingFilters: {},
-            displayModes: {}, // ✨ 新增：默认值
+            displayModes: {},
+            autoExpands: {}, // ✨ 新增：默认值// ✨ 新增：默认值
             headingColor: "#2196f3", // 新增：默认标题颜色（蓝色）
             flashingColor: "#EEE7DD",
 
@@ -1742,6 +1780,14 @@ export default class FootnoteCompassPlugin extends Plugin {
 
             // 1. 如果移动/重命名的是【单个文件】
             if (file instanceof TFile && file.extension === 'md') {
+
+
+                if (this.settings.autoExpands[oldPath] !== undefined) {
+                    this.settings.autoExpands[file.path] = this.settings.autoExpands[oldPath];
+                    delete this.settings.autoExpands[oldPath];
+                    hasChanges = true;
+                }
+
                 // 转移标注数据
                 if (this.annoManager.data[oldPath]) {
                     this.annoManager.data[file.path] = this.annoManager.data[oldPath];
@@ -1765,6 +1811,16 @@ export default class FootnoteCompassPlugin extends Plugin {
             else if (file instanceof TFolder) {
                 const oldPrefix = oldPath + "/";
                 const newPrefix = file.path + "/";
+
+
+                Object.keys(this.settings.autoExpands).forEach(key => {
+                    if (key.startsWith(oldPrefix)) {
+                        const newKey = key.replace(oldPrefix, newPrefix);
+                        this.settings.autoExpands[newKey] = this.settings.autoExpands[key];
+                        delete this.settings.autoExpands[key];
+                        hasChanges = true;
+                    }
+                });
 
                 // 批量转移该文件夹下所有【标注数据】
                 Object.keys(this.annoManager.data).forEach(key => {
