@@ -494,9 +494,8 @@
 }
 
 .annotation-comment-row .annotation-comment-text[style*="font-weight: bold"] {
-    font-weight: normal;
-    -webkit-text-stroke: 0.35px currentColor;
-    /* 模拟加粗且不改变宽度 */
+    font-weight: bold !important;
+    -webkit-text-stroke: unset;
 }
 
 /* =========================================

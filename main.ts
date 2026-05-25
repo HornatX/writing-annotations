@@ -1003,8 +1003,8 @@ class FootnoteListView extends ItemView {
                     card.dataset.annoId = anno.id; // ✨ 新增：给卡片打上用于精准查找的专属 ID 标签
                     anno.el = card;
 
-                    // ✨ 恢复状态：如果是关闭模式，且该卡片之前被手动点击展开过，则给它加上强制展开类
-                    if (displayModeStr === "closed" && this._forceExpandedCardId === anno.id) {
+                    // ✨ 恢复状态：如果关闭了自动展开，且该卡片之前被手动点击展开过，则给它加上强制展开类
+                    if (!isAutoExpand && this._forceExpandedCardId === anno.id) {
                         card.classList.add("force-expand");
                     }
 

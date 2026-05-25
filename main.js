@@ -803,7 +803,7 @@ var FootnoteListView = class extends import_obsidian.ItemView {
           const card = currentGroupWrapper.createDiv({ cls: "annotation-card" });
           card.dataset.annoId = anno.id;
           anno.el = card;
-          if (displayModeStr === "closed" && this._forceExpandedCardId === anno.id) {
+          if (!isAutoExpand && this._forceExpandedCardId === anno.id) {
             card.classList.add("force-expand");
           }
           const hColor = anno.highlightColor || this.plugin.settings.defaultHighlightColor;
