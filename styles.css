@@ -1010,3 +1010,8 @@ button.db-btn-relink:hover {
     outline: none;
 }
 
+/* 让原文本（标题）和分支都统一显示为普通箭头指针（而不是I型文本指针） */
+.annotation-highlight,
+.annotation-phantom {
+    cursor: default !important;
+}
