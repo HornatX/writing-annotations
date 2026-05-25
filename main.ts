@@ -1001,7 +1001,7 @@ class FootnoteListView extends ItemView {
 
                     const card = currentGroupWrapper.createDiv({ cls: "annotation-card" });
                     card.dataset.annoId = anno.id; // ✨ 新增：给卡片打上用于精准查找的专属 ID 标签
-                    anno.el = card;
+                    // anno.el = card;
 
                     // ✨ 恢复状态：如果关闭了自动展开，且该卡片之前被手动点击展开过，则给它加上强制展开类
                     if (!isAutoExpand && this._forceExpandedCardId === anno.id) {
@@ -1235,8 +1235,12 @@ class FootnoteListView extends ItemView {
             });
             const annos = this.plugin.annoManager.data[view.file?.path || ""] || [];
             annos.forEach(anno => {
-                if (anno.el && anno._tempOffset !== undefined && anno._tempOffset < Number.MAX_SAFE_INTEGER) {
-                    allItems.push({ el: anno.el, offset: anno._tempOffset, id: anno.id });
+                if (anno._tempOffset !== undefined && anno._tempOffset < Number.MAX_SAFE_INTEGER) {
+                    // ✨ 动态去页面里找对应的卡片，而不是去内存里拿，彻底解决内存泄漏
+                    const cardEl = this.listRoot?.querySelector(`.annotation-card[data-anno-id="${anno.id}"]`) as HTMLElement;
+                    if (cardEl) {
+                        allItems.push({ el: cardEl, offset: anno._tempOffset, id: anno.id });
+                    }
                 }
             });
 

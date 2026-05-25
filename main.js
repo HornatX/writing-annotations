@@ -802,7 +802,6 @@ var FootnoteListView = class extends import_obsidian.ItemView {
           }
           const card = currentGroupWrapper.createDiv({ cls: "annotation-card" });
           card.dataset.annoId = anno.id;
-          anno.el = card;
           if (!isAutoExpand && this._forceExpandedCardId === anno.id) {
             card.classList.add("force-expand");
           }
@@ -1016,8 +1015,11 @@ var FootnoteListView = class extends import_obsidian.ItemView {
       });
       const annos = this.plugin.annoManager.data[view.file?.path || ""] || [];
       annos.forEach((anno) => {
-        if (anno.el && anno._tempOffset !== void 0 && anno._tempOffset < Number.MAX_SAFE_INTEGER) {
-          allItems.push({ el: anno.el, offset: anno._tempOffset, id: anno.id });
+        if (anno._tempOffset !== void 0 && anno._tempOffset < Number.MAX_SAFE_INTEGER) {
+          const cardEl = this.listRoot?.querySelector(`.annotation-card[data-anno-id="${anno.id}"]`);
+          if (cardEl) {
+            allItems.push({ el: cardEl, offset: anno._tempOffset, id: anno.id });
+          }
         }
       });
       if (allItems.length === 0) return;
