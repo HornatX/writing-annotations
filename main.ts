@@ -1,8 +1,8 @@
 /* main.ts - Footnote & Hover Note Compass (TypeScript 重构完整版) */
 import {
     App, Plugin, ItemView, debounce, setIcon, Menu, Modal, Setting,
-    PluginSettingTab, TFile, TFolder, Notice, AbstractInputSuggest, normalizePath, // 👈 增加了 TFolder
-    WorkspaceLeaf, MarkdownView
+    PluginSettingTab, TFile, TFolder, Notice, AbstractInputSuggest, normalizePath,
+    WorkspaceLeaf, MarkdownView, FuzzySuggestModal, getIconIds
 } from 'obsidian';
 import { RangeSetBuilder, StateField, StateEffect, Transaction } from "@codemirror/state";
 import { Decoration, DecorationSet, WidgetType, EditorView } from "@codemirror/view";
@@ -35,6 +35,9 @@ export interface FootnoteCompassSettings {
     maxBackups: number;          // 最大备份份数 (5-50)
     backupIntervalHours: number; // 备份间隔时间(小时)
     lastBackupTime: number;
+    recentIcons: string[]; // ✨ 新增：保存最近使用的图标
+
+    iconOffsetY: number;       // ✨ 新增：图标向下微调的值
 
 }
 
@@ -57,6 +60,7 @@ export interface Annotation {
     _tempOffset?: number;
     _exportOffset?: number;
     el?: HTMLElement;
+    icon?: string; // ✨ 新增：在这里加上一行，用来保存选中的图标名称
 }
 
 export interface FootnoteRef {
@@ -423,6 +427,102 @@ class AnnotationManager {
     }
 }
 
+
+// ✨ 替换原来的图标选择器为高级网格版本
+class IconGridModal extends Modal {
+    plugin: FootnoteCompassPlugin;
+    onSelect: (iconName: string) => void;
+    allIcons: string[];
+    searchQuery: string = "";
+
+    constructor(plugin: FootnoteCompassPlugin, onSelect: (iconName: string) => void) {
+        super(plugin.app);
+        this.plugin = plugin;
+        this.onSelect = onSelect;
+        this.allIcons = getIconIds();
+    }
+
+    onOpen() {
+        const { contentEl } = this;
+        contentEl.empty();
+
+        // 1. 顶部搜索框
+        const searchContainer = contentEl.createDiv({ attr: { style: "margin-bottom: 15px;" } });
+        const searchInput = searchContainer.createEl("input", {
+            type: "text",
+            placeholder: "搜索图标名称 (如 star, heart)...",
+            attr: { style: "width: 100%; padding: 8px 12px; border-radius: 6px;" }
+        });
+
+        // 2. 下方大区域（带滚动条）
+        const gridWrapper = contentEl.createDiv({ attr: { style: "height: 400px; overflow-y: auto; padding-right: 5px;" } });
+
+        const renderGrid = () => {
+            gridWrapper.empty();
+            const query = this.searchQuery.toLowerCase();
+            const filteredIcons = query
+                ? this.allIcons.filter(icon => icon.toLowerCase().includes(query))
+                : this.allIcons;
+
+            const recents = this.plugin.settings.recentIcons || [];
+
+            // 只有当没有搜索内容，且有历史记录时，才渲染“最近使用”
+            if (!query && recents.length > 0) {
+                gridWrapper.createEl("div", { text: "最近使用的图标：", attr: { style: "font-size: 12px; color: var(--text-muted); margin-bottom: 10px;" } });
+                const recentGrid = gridWrapper.createDiv({ attr: { style: "display: grid; grid-template-columns: repeat(auto-fill, minmax(75px, 1fr)); gap: 8px; margin-bottom: 25px;" } });
+                recents.forEach(icon => this.createIconBtn(recentGrid, icon));
+            }
+
+            // 渲染“所有图标”
+            gridWrapper.createEl("div", { text: "所有图标：", attr: { style: "font-size: 12px; color: var(--text-muted); margin-bottom: 10px;" } });
+            const mainGrid = gridWrapper.createDiv({ attr: { style: "display: grid; grid-template-columns: repeat(auto-fill, minmax(75px, 1fr)); gap: 8px;" } });
+
+            // 为了防止 Obsidian 卡顿，一次最多渲染前 200 个，搜索时会实时过滤
+            filteredIcons.slice(0, 200).forEach(icon => this.createIconBtn(mainGrid, icon));
+        };
+
+        // 绑定搜索事件
+        searchInput.addEventListener("input", (e) => {
+            this.searchQuery = (e.target as HTMLInputElement).value;
+            renderGrid();
+        });
+
+        setTimeout(() => searchInput.focus(), 50); // 弹窗后自动聚焦输入框
+        renderGrid();
+    }
+
+    // 渲染单个网格按钮的工具函数
+    createIconBtn(parent: HTMLElement, iconName: string) {
+        const btn = parent.createDiv({ attr: { style: "display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 12px 4px; border-radius: 8px; cursor: pointer; border: 1px solid var(--background-modifier-border); transition: background-color 0.2s;" } });
+
+        btn.addEventListener("mouseover", () => btn.style.backgroundColor = "var(--background-modifier-hover)");
+        btn.addEventListener("mouseout", () => btn.style.backgroundColor = "transparent");
+
+        const iconSpan = btn.createSpan({ attr: { style: "margin-bottom: 8px; pointer-events: none;" } });
+        setIcon(iconSpan, iconName);
+
+        // 如果名字太长，截断它
+        let displayName = iconName;
+        if (displayName.length > 10) displayName = displayName.substring(0, 8) + "..";
+        btn.createSpan({ text: displayName, attr: { style: "font-size: 11px; color: var(--text-muted); pointer-events: none;" } });
+
+        btn.onclick = async () => {
+            // 选中时，更新“最近使用”记录
+            let recents = this.plugin.settings.recentIcons || [];
+            recents = recents.filter(id => id !== iconName); // 把旧的同名踢掉
+            recents.unshift(iconName); // 把最新的插到第 1 个
+            if (recents.length > 5) recents.pop(); // 保持最多 5 个
+            this.plugin.settings.recentIcons = recents;
+            await this.plugin.saveSettings();
+
+            this.onSelect(iconName);
+            this.close();
+        };
+    }
+
+    onClose() { this.contentEl.empty(); }
+}
+
 // --- 弹窗组件集 ---
 class ColorPickerModal extends Modal {
     // ✨ 修改：onSelect 现在允许接收 null 代表恢复默认
@@ -473,16 +573,16 @@ class CommentModal extends Modal {
     }
     onOpen() {
         this.setTitle(this.titleText);
-        
+
         // 1. 保存这个 Setting 的实例，方便后续加 CSS 类名
         const textSetting = new Setting(this.contentEl)
             .setName("内容文字")
             // 2. 修改提示语，告知用户如何换行
-            .setDesc("输入变体内容。(Enter 保存，Shift + Enter 换行)") 
+            .setDesc("输入变体内容。(Enter 保存，Shift + Enter 换行)")
             // 3. 改为 addTextArea
             .addTextArea(text => {
                 text.setValue(this.result).onChange(val => this.result = val);
-                
+
                 // 4. 设置文本框的基础样式
                 text.inputEl.style.width = "100%";
                 text.inputEl.style.minHeight = "120px"; // 给一个足够大的初始高度
@@ -1074,6 +1174,35 @@ class FootnoteListView extends ItemView {
                                 }).open();
                             });
                         });
+
+
+                        // ✨ 新增：紧接着在下面加上这一段：
+                        menu.addItem((item) => {
+                            item.setTitle("添加图标").setIcon("smile-plus").onClick(() => {
+                                new IconGridModal(this.plugin, async (iconName) => {
+                                    anno.icon = iconName; // 保存选中的图标
+                                    await this.plugin.annoManager.save();
+                                    this._lastStateHash = "";
+                                    this.checkAndUpdate(); // 刷新界面
+                                }).open();
+                            });
+
+
+                            // ✨ 新增：如果当前已经有图标，就多加一个“删除图标”选项
+                            if (anno.icon) {
+                                menu.addItem((item) => {
+                                    item.setTitle("删除图标").setIcon("eraser").onClick(async () => {
+                                        delete anno.icon; // 清除图标数据
+                                        await this.plugin.annoManager.save();
+                                        this._lastStateHash = "";
+                                        this.checkAndUpdate(); // 刷新界面
+                                    });
+                                });
+                            }
+                        });
+
+
+
                         menu.addSeparator();
                         menu.addItem((item) => {
                             item.setTitle("修改标注颜色").setIcon("highlighter").onClick(() => {
@@ -1159,9 +1288,28 @@ class FootnoteListView extends ItemView {
                     const checkedComment = (anno.comments || []).find(c => c.checked);
                     const variantText = checkedComment ? checkedComment.text : "无";
 
-                    header.createSpan({ text: anno.original, cls: "anno-title-text anno-text-original" });
-                    header.createSpan({ text: variantText, cls: "anno-title-text anno-text-variant" });
-                    header.createSpan({ text: `${anno.original}：${variantText}`, cls: "anno-title-text anno-text-both" });
+                    // ✨ 修复：加上 flex: 1 和 min-width: 0，让长文字能够乖乖被截断并显示 "..."
+                    const titleWrapper = header.createDiv({ 
+                        cls: "anno-title-wrapper", 
+                        attr: { style: "display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;" } 
+                    });
+
+                    if (anno.icon) {
+                        const iconSpan = titleWrapper.createSpan({ cls: "anno-icon" });
+                        iconSpan.style.flexShrink = "0"; // ✨ 保护机制：文字再长也绝对不能去挤压图标
+                        setIcon(iconSpan, anno.icon); // 恢复默认颜色
+                        
+                        // 读取你的设置，并通过 relative 定位实现垂直微调
+                        const offset = this.plugin.settings.iconOffsetY || 0;
+                        if (offset !== 0) {
+                            iconSpan.style.position = "relative";
+                            iconSpan.style.top = `${offset}px`;
+                        }
+                    }
+
+                    titleWrapper.createSpan({ text: anno.original, cls: "anno-title-text anno-text-original" });
+                    titleWrapper.createSpan({ text: variantText, cls: "anno-title-text anno-text-variant" });
+                    titleWrapper.createSpan({ text: `${anno.original}：${variantText}`, cls: "anno-title-text anno-text-both" });
 
                     const list = card.createDiv({ cls: "annotation-comments-list" });
 
@@ -1443,6 +1591,25 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
 
         // 👇 新增：选区背景颜色
         this.createColorSetting(containerEl, "选区背景高亮颜色", "修改选区高亮时的背景颜色（对应 .is-flashing 的背景色）。", 'flashingColor');
+
+        // ✨ 新增：图标向下微调输入框
+        new Setting(containerEl)
+            .setName("图标向下微调")
+            .setDesc("微调标题前面图标的垂直位置，填入数字即可（负数代表向上微调）。不同字体下可能需要微调对齐。")
+            .addText(text => text
+                .setPlaceholder("0")
+                .setValue((this.plugin.settings.iconOffsetY || 0).toString())
+                .onChange(async (value) => {
+                    const num = parseFloat(value);
+                    if (!isNaN(num)) {
+                        this.plugin.settings.iconOffsetY = num;
+                    } else if (value.trim() === "") {
+                        this.plugin.settings.iconOffsetY = 0; // 清空时恢复默认 0
+                    }
+                    await this.plugin.saveSettings();
+                    this.forceRefreshSidebar(); // ✨ 保存后立刻刷新侧边栏，方便你实时看效果！
+                })
+            );
 
         // 🚨 删掉这里原本的两个 new Setting(containerEl) 标题字号和分支字号 🚨
 
@@ -1765,6 +1932,8 @@ export default class FootnoteCompassPlugin extends Plugin {
             autoExpands: {}, // ✨ 新增：默认值// ✨ 新增：默认值
             headingColor: "#2196f3", // 新增：默认标题颜色（蓝色）
             flashingColor: "#EEE7DD",
+            iconOffsetY: 0,    // ✨ 新增：默认微调为 0
+            recentIcons: [], // ✨ 新增：默认初始化为空
 
             maxBackups: 20,           // 默认保存 20 份
             backupIntervalHours: 1,   // 默认 1 小时冷却时间

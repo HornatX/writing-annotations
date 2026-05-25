@@ -308,6 +308,70 @@ ${newBlock}
     await this._performWrite();
   }
 };
+var IconGridModal = class extends import_obsidian.Modal {
+  constructor(plugin, onSelect) {
+    super(plugin.app);
+    this.searchQuery = "";
+    this.plugin = plugin;
+    this.onSelect = onSelect;
+    this.allIcons = (0, import_obsidian.getIconIds)();
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    const searchContainer = contentEl.createDiv({ attr: { style: "margin-bottom: 15px;" } });
+    const searchInput = searchContainer.createEl("input", {
+      type: "text",
+      placeholder: "\u641C\u7D22\u56FE\u6807\u540D\u79F0 (\u5982 star, heart)...",
+      attr: { style: "width: 100%; padding: 8px 12px; border-radius: 6px;" }
+    });
+    const gridWrapper = contentEl.createDiv({ attr: { style: "height: 400px; overflow-y: auto; padding-right: 5px;" } });
+    const renderGrid = () => {
+      gridWrapper.empty();
+      const query = this.searchQuery.toLowerCase();
+      const filteredIcons = query ? this.allIcons.filter((icon) => icon.toLowerCase().includes(query)) : this.allIcons;
+      const recents = this.plugin.settings.recentIcons || [];
+      if (!query && recents.length > 0) {
+        gridWrapper.createEl("div", { text: "\u6700\u8FD1\u4F7F\u7528\u7684\u56FE\u6807\uFF1A", attr: { style: "font-size: 12px; color: var(--text-muted); margin-bottom: 10px;" } });
+        const recentGrid = gridWrapper.createDiv({ attr: { style: "display: grid; grid-template-columns: repeat(auto-fill, minmax(75px, 1fr)); gap: 8px; margin-bottom: 25px;" } });
+        recents.forEach((icon) => this.createIconBtn(recentGrid, icon));
+      }
+      gridWrapper.createEl("div", { text: "\u6240\u6709\u56FE\u6807\uFF1A", attr: { style: "font-size: 12px; color: var(--text-muted); margin-bottom: 10px;" } });
+      const mainGrid = gridWrapper.createDiv({ attr: { style: "display: grid; grid-template-columns: repeat(auto-fill, minmax(75px, 1fr)); gap: 8px;" } });
+      filteredIcons.slice(0, 200).forEach((icon) => this.createIconBtn(mainGrid, icon));
+    };
+    searchInput.addEventListener("input", (e) => {
+      this.searchQuery = e.target.value;
+      renderGrid();
+    });
+    setTimeout(() => searchInput.focus(), 50);
+    renderGrid();
+  }
+  // 渲染单个网格按钮的工具函数
+  createIconBtn(parent, iconName) {
+    const btn = parent.createDiv({ attr: { style: "display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 12px 4px; border-radius: 8px; cursor: pointer; border: 1px solid var(--background-modifier-border); transition: background-color 0.2s;" } });
+    btn.addEventListener("mouseover", () => btn.style.backgroundColor = "var(--background-modifier-hover)");
+    btn.addEventListener("mouseout", () => btn.style.backgroundColor = "transparent");
+    const iconSpan = btn.createSpan({ attr: { style: "margin-bottom: 8px; pointer-events: none;" } });
+    (0, import_obsidian.setIcon)(iconSpan, iconName);
+    let displayName = iconName;
+    if (displayName.length > 10) displayName = displayName.substring(0, 8) + "..";
+    btn.createSpan({ text: displayName, attr: { style: "font-size: 11px; color: var(--text-muted); pointer-events: none;" } });
+    btn.onclick = async () => {
+      let recents = this.plugin.settings.recentIcons || [];
+      recents = recents.filter((id) => id !== iconName);
+      recents.unshift(iconName);
+      if (recents.length > 5) recents.pop();
+      this.plugin.settings.recentIcons = recents;
+      await this.plugin.saveSettings();
+      this.onSelect(iconName);
+      this.close();
+    };
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
 var ColorPickerModal = class extends import_obsidian.Modal {
   // ✨ 修改：onSelect 现在允许接收 null 代表恢复默认
   constructor(app, titleText, palette, onSelect) {
@@ -851,6 +915,26 @@ var FootnoteListView = class extends import_obsidian.ItemView {
                 }).open();
               });
             });
+            menu.addItem((item) => {
+              item.setTitle("\u6DFB\u52A0\u56FE\u6807").setIcon("smile-plus").onClick(() => {
+                new IconGridModal(this.plugin, async (iconName) => {
+                  anno.icon = iconName;
+                  await this.plugin.annoManager.save();
+                  this._lastStateHash = "";
+                  this.checkAndUpdate();
+                }).open();
+              });
+              if (anno.icon) {
+                menu.addItem((item2) => {
+                  item2.setTitle("\u5220\u9664\u56FE\u6807").setIcon("eraser").onClick(async () => {
+                    delete anno.icon;
+                    await this.plugin.annoManager.save();
+                    this._lastStateHash = "";
+                    this.checkAndUpdate();
+                  });
+                });
+              }
+            });
             menu.addSeparator();
             menu.addItem((item) => {
               item.setTitle("\u4FEE\u6539\u6807\u6CE8\u989C\u8272").setIcon("highlighter").onClick(() => {
@@ -930,9 +1014,23 @@ var FootnoteListView = class extends import_obsidian.ItemView {
           header.dataset.displayMode = displayModeStr;
           const checkedComment = (anno.comments || []).find((c) => c.checked);
           const variantText = checkedComment ? checkedComment.text : "\u65E0";
-          header.createSpan({ text: anno.original, cls: "anno-title-text anno-text-original" });
-          header.createSpan({ text: variantText, cls: "anno-title-text anno-text-variant" });
-          header.createSpan({ text: `${anno.original}\uFF1A${variantText}`, cls: "anno-title-text anno-text-both" });
+          const titleWrapper = header.createDiv({
+            cls: "anno-title-wrapper",
+            attr: { style: "display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;" }
+          });
+          if (anno.icon) {
+            const iconSpan = titleWrapper.createSpan({ cls: "anno-icon" });
+            iconSpan.style.flexShrink = "0";
+            (0, import_obsidian.setIcon)(iconSpan, anno.icon);
+            const offset = this.plugin.settings.iconOffsetY || 0;
+            if (offset !== 0) {
+              iconSpan.style.position = "relative";
+              iconSpan.style.top = `${offset}px`;
+            }
+          }
+          titleWrapper.createSpan({ text: anno.original, cls: "anno-title-text anno-text-original" });
+          titleWrapper.createSpan({ text: variantText, cls: "anno-title-text anno-text-variant" });
+          titleWrapper.createSpan({ text: `${anno.original}\uFF1A${variantText}`, cls: "anno-title-text anno-text-both" });
           const list = card.createDiv({ cls: "annotation-comments-list" });
           (anno.comments || []).forEach((comment) => {
             const row = list.createDiv({ cls: "annotation-comment-row" });
@@ -1169,6 +1267,18 @@ var FootnoteCompassSettingTab = class extends import_obsidian.PluginSettingTab {
     this.createColorSetting(containerEl, "\u9ED8\u8BA4\u66FF\u6362\u540E\u53D8\u4F53\u989C\u8272", "\u5728\u6B63\u6587\u4E2D\u66FF\u6362\u6210\u53D8\u4F53\u6587\u5B57\u540E\u7684\u6587\u5B57\u548C\u8FB9\u6846\u989C\u8272\u3002", "defaultPhantomColor");
     this.createColorSetting(containerEl, "\u4FA7\u8FB9\u680F\u5206\u7C7B\u6807\u9898\u989C\u8272", "\u5728\u4FA7\u8FB9\u680F\u4E2D\u57FA\u4E8EH1-H6\u5206\u7C7B\u663E\u793A\u7684\u6807\u9898\u6587\u672C\u989C\u8272\u3002", "headingColor");
     this.createColorSetting(containerEl, "\u9009\u533A\u80CC\u666F\u9AD8\u4EAE\u989C\u8272", "\u4FEE\u6539\u9009\u533A\u9AD8\u4EAE\u65F6\u7684\u80CC\u666F\u989C\u8272\uFF08\u5BF9\u5E94 .is-flashing \u7684\u80CC\u666F\u8272\uFF09\u3002", "flashingColor");
+    new import_obsidian.Setting(containerEl).setName("\u56FE\u6807\u5411\u4E0B\u5FAE\u8C03").setDesc("\u5FAE\u8C03\u6807\u9898\u524D\u9762\u56FE\u6807\u7684\u5782\u76F4\u4F4D\u7F6E\uFF0C\u586B\u5165\u6570\u5B57\u5373\u53EF\uFF08\u8D1F\u6570\u4EE3\u8868\u5411\u4E0A\u5FAE\u8C03\uFF09\u3002\u4E0D\u540C\u5B57\u4F53\u4E0B\u53EF\u80FD\u9700\u8981\u5FAE\u8C03\u5BF9\u9F50\u3002").addText(
+      (text) => text.setPlaceholder("0").setValue((this.plugin.settings.iconOffsetY || 0).toString()).onChange(async (value) => {
+        const num = parseFloat(value);
+        if (!isNaN(num)) {
+          this.plugin.settings.iconOffsetY = num;
+        } else if (value.trim() === "") {
+          this.plugin.settings.iconOffsetY = 0;
+        }
+        await this.plugin.saveSettings();
+        this.forceRefreshSidebar();
+      })
+    );
     const colorSection = containerEl.createDiv({ cls: "color-preset-section" });
     const headerDiv = colorSection.createDiv({ cls: "color-preset-header" });
     headerDiv.createEl("h3", { text: "\u989C\u8272\u9884\u8BBE\u7BA1\u7406" });
@@ -1422,6 +1532,10 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
       headingColor: "#2196f3",
       // 新增：默认标题颜色（蓝色）
       flashingColor: "#EEE7DD",
+      iconOffsetY: 0,
+      // ✨ 新增：默认微调为 0
+      recentIcons: [],
+      // ✨ 新增：默认初始化为空
       maxBackups: 20,
       // 默认保存 20 份
       backupIntervalHours: 1,
