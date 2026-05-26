@@ -188,6 +188,99 @@ function createDeletionLockExtension(plugin) {
     return tr;
   });
 }
+function createCopyInterceptorExtension() {
+  return import_view.EditorView.domEventHandlers({
+    copy: (event, view) => {
+      const ranges = view.state.selection.ranges;
+      const decos = view.state.field(annotationField, false);
+      if (!decos || ranges.some((r) => r.empty)) return false;
+      let hasPhantom = false;
+      ranges.forEach((r) => {
+        decos.between(r.from, r.to, (from, to, value) => {
+          if (value.spec.widget instanceof PhantomWidget) {
+            hasPhantom = true;
+          }
+        });
+      });
+      if (!hasPhantom) return false;
+      const doc = view.state.doc;
+      const texts = [];
+      ranges.forEach((r) => {
+        let result = "";
+        let currentPos = r.from;
+        decos.between(r.from, r.to, (dFrom, dTo, value) => {
+          if (dTo <= currentPos) return;
+          const start = Math.max(currentPos, dFrom);
+          if (start > currentPos) {
+            result += doc.sliceString(currentPos, start);
+          }
+          if (value.spec.widget instanceof PhantomWidget) {
+            result += value.spec.widget.text;
+          }
+          currentPos = Math.max(currentPos, dTo);
+        });
+        if (currentPos < r.to) {
+          result += doc.sliceString(currentPos, r.to);
+        }
+        texts.push(result);
+      });
+      const finalText = texts.join(view.state.lineBreak);
+      if (event.clipboardData) {
+        event.clipboardData.setData("text/plain", finalText);
+        event.preventDefault();
+        return true;
+      }
+      return false;
+    },
+    cut: (event, view) => {
+      const ranges = view.state.selection.ranges;
+      const decos = view.state.field(annotationField, false);
+      if (!decos || ranges.some((r) => r.empty)) return false;
+      let hasPhantom = false;
+      ranges.forEach((r) => {
+        decos.between(r.from, r.to, (from, to, value) => {
+          if (value.spec.widget instanceof PhantomWidget) {
+            hasPhantom = true;
+          }
+        });
+      });
+      if (!hasPhantom) return false;
+      const doc = view.state.doc;
+      const texts = [];
+      ranges.forEach((r) => {
+        let result = "";
+        let currentPos = r.from;
+        decos.between(r.from, r.to, (dFrom, dTo, value) => {
+          if (dTo <= currentPos) return;
+          const start = Math.max(currentPos, dFrom);
+          if (start > currentPos) {
+            result += doc.sliceString(currentPos, start);
+          }
+          if (value.spec.widget instanceof PhantomWidget) {
+            result += value.spec.widget.text;
+          }
+          currentPos = Math.max(currentPos, dTo);
+        });
+        if (currentPos < r.to) {
+          result += doc.sliceString(currentPos, r.to);
+        }
+        texts.push(result);
+      });
+      const finalText = texts.join(view.state.lineBreak);
+      if (event.clipboardData) {
+        event.clipboardData.setData("text/plain", finalText);
+        event.preventDefault();
+        let changes = ranges.map((r) => ({ from: r.from, to: r.to }));
+        view.dispatch({
+          changes,
+          userEvent: "delete.cut"
+        });
+        return true;
+      }
+      return false;
+    }
+  });
+}
 function createAnnotationDecorations(view, annotations, plugin) {
   const builder = new import_state.RangeSetBuilder();
   const text = view.state.doc.toString();
@@ -1603,7 +1696,7 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
     }, loadedData);
     this.annoManager = new AnnotationManager(this);
     this.addSettingTab(new FootnoteCompassSettingTab(this.app, this));
-    this.registerEditorExtension([annotationField, createDeletionLockExtension(this)]);
+    this.registerEditorExtension([annotationField, createDeletionLockExtension(this), createCopyInterceptorExtension()]);
     this.registerView(VIEW_TYPE_FOOTNOTE, (leaf) => new FootnoteListView(leaf, this));
     this.addRibbonIcon("message-circle-more", "\u6253\u5F00\u811A\u6CE8\u4E0E\u6807\u6CE8\u9762\u677F", () => {
       this.activateView();

@@ -283,6 +283,123 @@ function createDeletionLockExtension(plugin: FootnoteCompassPlugin) {
     });
 }
 
+    // ✨ 新增：CM6 复制/剪切拦截器（实现“所见即所得”的复制）
+function createCopyInterceptorExtension() {
+    return EditorView.domEventHandlers({
+        copy: (event: ClipboardEvent, view: EditorView) => {
+            const ranges = view.state.selection.ranges;
+            const decos = view.state.field(annotationField, false);
+            // 1. 如果没有装饰器，或者全是空选区，直接走默认逻辑
+            if (!decos || ranges.some(r => r.empty)) return false;
+
+            let hasPhantom = false;
+            ranges.forEach(r => {
+                decos.between(r.from, r.to, (from, to, value) => {
+                    if (value.spec.widget instanceof PhantomWidget) {
+                        hasPhantom = true;
+                    }
+                });
+            });
+
+            // 2. 如果选区内没有任何分支或标注文本，依然走系统默认复制逻辑
+            if (!hasPhantom) return false;
+
+            const doc = view.state.doc;
+            const texts: string[] = [];
+
+            // 3. 提取可见文本并拼接
+            ranges.forEach(r => {
+                let result = "";
+                let currentPos = r.from;
+
+                decos.between(r.from, r.to, (dFrom, dTo, value) => {
+                    if (dTo <= currentPos) return;
+
+                    const start = Math.max(currentPos, dFrom);
+                    if (start > currentPos) {
+                        result += doc.sliceString(currentPos, start); // 拼接前置的普通文本
+                    }
+
+                    if (value.spec.widget instanceof PhantomWidget) {
+                        result += value.spec.widget.text; // 🌟 拼接视觉上的变体文本
+                    }
+
+                    currentPos = Math.max(currentPos, dTo);
+                });
+
+                if (currentPos < r.to) {
+                    result += doc.sliceString(currentPos, r.to); // 拼接剩余文本
+                }
+                texts.push(result);
+            });
+
+            const finalText = texts.join(view.state.lineBreak);
+
+            // 4. 将我们处理好的“所见即所得”文本塞入剪贴板
+            if (event.clipboardData) {
+                event.clipboardData.setData('text/plain', finalText);
+                event.preventDefault();
+                return true; 
+            }
+
+            return false;
+        },
+        
+        cut: (event: ClipboardEvent, view: EditorView) => {
+            const ranges = view.state.selection.ranges;
+            const decos = view.state.field(annotationField, false);
+            if (!decos || ranges.some(r => r.empty)) return false;
+
+            let hasPhantom = false;
+            ranges.forEach(r => {
+                decos.between(r.from, r.to, (from, to, value) => {
+                    if (value.spec.widget instanceof PhantomWidget) { hasPhantom = true; }
+                });
+            });
+
+            if (!hasPhantom) return false;
+
+            const doc = view.state.doc;
+            const texts: string[] = [];
+
+            ranges.forEach(r => {
+                let result = "";
+                let currentPos = r.from;
+
+                decos.between(r.from, r.to, (dFrom, dTo, value) => {
+                    if (dTo <= currentPos) return;
+                    const start = Math.max(currentPos, dFrom);
+                    if (start > currentPos) { result += doc.sliceString(currentPos, start); }
+                    if (value.spec.widget instanceof PhantomWidget) { result += value.spec.widget.text; }
+                    currentPos = Math.max(currentPos, dTo);
+                });
+
+                if (currentPos < r.to) { result += doc.sliceString(currentPos, r.to); }
+                texts.push(result);
+            });
+
+            const finalText = texts.join(view.state.lineBreak);
+
+            if (event.clipboardData) {
+                event.clipboardData.setData('text/plain', finalText);
+                event.preventDefault();
+                
+                // 执行剪切动作（它会安全地触发保护机制或删除文本）
+                let changes = ranges.map(r => ({from: r.from, to: r.to}));
+                view.dispatch({
+                    changes: changes,
+                    userEvent: "delete.cut"
+                });
+                return true;
+            }
+            return false;
+        }
+    });
+}
+
+
+
+
 function createAnnotationDecorations(view: EditorView, annotations: Annotation[], plugin: FootnoteCompassPlugin): DecorationSet {
     const builder = new RangeSetBuilder<Decoration>();
     const text = view.state.doc.toString();
@@ -2012,7 +2129,7 @@ export default class FootnoteCompassPlugin extends Plugin {
 
         this.annoManager = new AnnotationManager(this);
         this.addSettingTab(new FootnoteCompassSettingTab(this.app, this));
-        this.registerEditorExtension([annotationField, createDeletionLockExtension(this)]);
+        this.registerEditorExtension([annotationField, createDeletionLockExtension(this), createCopyInterceptorExtension()]);
         this.registerView(VIEW_TYPE_FOOTNOTE, (leaf) => new FootnoteListView(leaf, this));
         this.addRibbonIcon('message-circle-more', '打开脚注与标注面板', () => { this.activateView(); });
 
