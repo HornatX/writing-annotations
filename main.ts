@@ -745,39 +745,52 @@ class ConfirmModal extends Modal {
 
 class CommentModal extends Modal {
     result: string;
+    descText: string; // ✨ 新增：用于动态改变提示语
 
     constructor(app: App, public titleText: string, initialVal: string, public onSubmit: (val: string) => void, public onDelete: (() => void) | null = null) {
         super(app);
         this.result = initialVal || "";
+
+        // ✨ 漏洞修复：根据标题动态判断，是修改原词还是写变体
+        if (titleText.includes("原文本")) {
+            this.descText = "修改正文中的原词。(⚠️ 原词必须在同一段内，不支持换行)";
+        } else {
+            this.descText = "输入变体内容。(Enter 保存，Shift + Enter 换行)";
+        }
     }
+
     onOpen() {
         this.setTitle(this.titleText);
 
-        // 1. 保存这个 Setting 的实例，方便后续加 CSS 类名
         const textSetting = new Setting(this.contentEl)
             .setName("内容文字")
-            // 2. 修改提示语，告知用户如何换行
-            .setDesc("输入变体内容。(Enter 保存，Shift + Enter 换行)")
-            // 3. 改为 addTextArea
+            .setDesc(this.descText) // ✨ 使用动态提示语
             .addTextArea(text => {
                 text.setValue(this.result).onChange(val => this.result = val);
 
-                // 4. 设置文本框的基础样式
                 text.inputEl.style.width = "100%";
-                text.inputEl.style.minHeight = "120px"; // 给一个足够大的初始高度
-                text.inputEl.style.resize = "vertical"; // 允许用户鼠标拖拽调节高度
+                text.inputEl.style.minHeight = "120px";
+                text.inputEl.style.resize = "vertical";
 
                 text.inputEl.addEventListener("keydown", (e: KeyboardEvent) => {
-                    // 5. 逻辑修改：只有按下 Enter 且 没有按 Shift 时才保存；按 Shift+Enter 则正常换行
-                    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
-                        e.preventDefault();
-                        if (this.result.trim()) this.onSubmit(this.result.trim());
-                        this.close();
+                    if (e.key === "Enter" && !e.isComposing) {
+                        // ✨ 终极防御 1：如果是原文本模式，只要按下回车就直接保存，屏蔽掉 Shift+Enter 换行！
+                        if (this.titleText.includes("原文本")) {
+                            e.preventDefault();
+                            if (this.result.trim()) this.onSubmit(this.result.trim());
+                            this.close();
+                        } else {
+                            // ✨ 变体模式：允许按 Shift+Enter 换行
+                            if (!e.shiftKey) {
+                                e.preventDefault();
+                                if (this.result.trim()) this.onSubmit(this.result.trim());
+                                this.close();
+                            }
+                        }
                     }
                 });
             });
 
-        // 6. 给这个包裹元素加一个专属的 CSS 类，用于强制上下排版
         textSetting.settingEl.addClass("annotation-textarea-setting");
 
         const btnSetting = new Setting(this.contentEl);
@@ -1403,12 +1416,16 @@ class FootnoteListView extends ItemView {
                         menu.addSeparator();
 
                         // ✨ 重构：修改原文本 (严密作用域，不会报错)
+                        // ✨ 重构：修改原文本 (严密作用域，不会报错)
                         menu.addItem((item) => {
                             item.setTitle("修改原文本").setIcon("pencil").onClick(async () => {
                                 const view = this.lastActiveView;
                                 if (!view || !view.editor) return;
 
-                                new CommentModal(this.app, "修改标注原文本", anno.original, async (newText) => {
+                                new CommentModal(this.app, "修改标注原文本", anno.original, async (rawNewText) => {
+                                    // ✨ 终极防御 2：如果用户强行粘贴了多行文本，将其中的换行符全部碾平替换为空格！
+                                    const newText = rawNewText.replace(/\r?\n/g, ' ').trim();
+
                                     if (!newText || newText === anno.original) return;
 
                                     const editor = view.editor;
@@ -1430,8 +1447,11 @@ class FootnoteListView extends ItemView {
                                     const lineText = editor.getLine(cursor.line);
                                     anno.original = newText;
 
+                                    // ✨ 安全计算：现在 newText 绝不包含换行符了，这里的截取才不会越界报错
                                     anno.prefix = lineText.substring(Math.max(0, cursor.ch - 30), cursor.ch);
-                                    anno.suffix = lineText.substring(cursor.ch + newText.length, cursor.ch + newText.length + 30);
+                                    const suffixStart = cursor.ch + newText.length;
+                                    anno.suffix = lineText.substring(suffixStart, Math.min(lineText.length, suffixStart + 30));
+
                                     anno.expectedOffset = match.start;
 
                                     await this.plugin.annoManager.save();

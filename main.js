@@ -558,25 +558,39 @@ var ConfirmModal = class extends import_obsidian.Modal {
   }
 };
 var CommentModal = class extends import_obsidian.Modal {
+  // ✨ 新增：用于动态改变提示语
   constructor(app, titleText, initialVal, onSubmit, onDelete = null) {
     super(app);
     this.titleText = titleText;
     this.onSubmit = onSubmit;
     this.onDelete = onDelete;
     this.result = initialVal || "";
+    if (titleText.includes("\u539F\u6587\u672C")) {
+      this.descText = "\u4FEE\u6539\u6B63\u6587\u4E2D\u7684\u539F\u8BCD\u3002(\u26A0\uFE0F \u539F\u8BCD\u5FC5\u987B\u5728\u540C\u4E00\u6BB5\u5185\uFF0C\u4E0D\u652F\u6301\u6362\u884C)";
+    } else {
+      this.descText = "\u8F93\u5165\u53D8\u4F53\u5185\u5BB9\u3002(Enter \u4FDD\u5B58\uFF0CShift + Enter \u6362\u884C)";
+    }
   }
   onOpen() {
     this.setTitle(this.titleText);
-    const textSetting = new import_obsidian.Setting(this.contentEl).setName("\u5185\u5BB9\u6587\u5B57").setDesc("\u8F93\u5165\u53D8\u4F53\u5185\u5BB9\u3002(Enter \u4FDD\u5B58\uFF0CShift + Enter \u6362\u884C)").addTextArea((text) => {
+    const textSetting = new import_obsidian.Setting(this.contentEl).setName("\u5185\u5BB9\u6587\u5B57").setDesc(this.descText).addTextArea((text) => {
       text.setValue(this.result).onChange((val) => this.result = val);
       text.inputEl.style.width = "100%";
       text.inputEl.style.minHeight = "120px";
       text.inputEl.style.resize = "vertical";
       text.inputEl.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
-          e.preventDefault();
-          if (this.result.trim()) this.onSubmit(this.result.trim());
-          this.close();
+        if (e.key === "Enter" && !e.isComposing) {
+          if (this.titleText.includes("\u539F\u6587\u672C")) {
+            e.preventDefault();
+            if (this.result.trim()) this.onSubmit(this.result.trim());
+            this.close();
+          } else {
+            if (!e.shiftKey) {
+              e.preventDefault();
+              if (this.result.trim()) this.onSubmit(this.result.trim());
+              this.close();
+            }
+          }
         }
       });
     });
@@ -698,7 +712,7 @@ var FootnoteListView = class extends import_obsidian.ItemView {
     return VIEW_TYPE_FOOTNOTE;
   }
   getDisplayText() {
-    return "\u811A\u6CE8 & \u53D8\u4F53\u5927\u7EB2";
+    return "\u5C0F\u8BF4\u6807\u6CE8\u5206\u652F\u5927\u7EB2";
   }
   getIcon() {
     return "message-circle-more";
@@ -1094,7 +1108,8 @@ var FootnoteListView = class extends import_obsidian.ItemView {
               item.setTitle("\u4FEE\u6539\u539F\u6587\u672C").setIcon("pencil").onClick(async () => {
                 const view = this.lastActiveView;
                 if (!view || !view.editor) return;
-                new CommentModal(this.app, "\u4FEE\u6539\u6807\u6CE8\u539F\u6587\u672C", anno.original, async (newText) => {
+                new CommentModal(this.app, "\u4FEE\u6539\u6807\u6CE8\u539F\u6587\u672C", anno.original, async (rawNewText) => {
+                  const newText = rawNewText.replace(/\r?\n/g, " ").trim();
                   if (!newText || newText === anno.original) return;
                   const editor = view.editor;
                   const fullText2 = editor.getValue();
@@ -1112,7 +1127,8 @@ var FootnoteListView = class extends import_obsidian.ItemView {
                   const lineText = editor.getLine(cursor.line);
                   anno.original = newText;
                   anno.prefix = lineText.substring(Math.max(0, cursor.ch - 30), cursor.ch);
-                  anno.suffix = lineText.substring(cursor.ch + newText.length, cursor.ch + newText.length + 30);
+                  const suffixStart = cursor.ch + newText.length;
+                  anno.suffix = lineText.substring(suffixStart, Math.min(lineText.length, suffixStart + 30));
                   anno.expectedOffset = match.start;
                   await this.plugin.annoManager.save();
                   updateEditorDecorations(this.plugin);
@@ -1357,7 +1373,7 @@ var FootnoteCompassSettingTab = class extends import_obsidian.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "\u811A\u6CE8\u4E0E\u6807\u6CE8\u5927\u7EB2 \u8BBE\u7F6E" });
+    containerEl.createEl("h2", { text: "\u6807\u6CE8\u5927\u7EB2 \u8BBE\u7F6E" });
     const DEFAULT_FILE = "\u5927\u7EB2\u53D8\u4F53\u6807\u6CE8\u6570\u636E\u5E93.md";
     new import_obsidian.Setting(containerEl).setName("\u6807\u6CE8\u6570\u636E\u5B58\u50A8\u6587\u4EF6").setDesc("\u6307\u5B9A\u4E00\u4E2A .md \u6587\u4EF6\u6765\u5B89\u5168\u5B58\u50A8\u4F60\u7684\u6807\u6CE8\u548C\u53D8\u4F53\u6570\u636E\u3002\u7559\u7A7A\u5219\u9ED8\u8BA4\u4F7F\u7528\u300C\u5927\u7EB2\u53D8\u4F53\u6807\u6CE8\u6570\u636E\u5E93.md\u300D\u3002\u652F\u6301\u76F4\u63A5\u8F93\u5165\u65B0\u6587\u4EF6\u540D\uFF0C\u6216\u641C\u7D22\u9009\u62E9\u5DF2\u6709\u6587\u4EF6\u3002").addText((text) => {
       text.setPlaceholder(DEFAULT_FILE).setValue(this.plugin.settings.annotationFilePath === DEFAULT_FILE ? "" : this.plugin.settings.annotationFilePath).onChange(async (value) => {
@@ -1670,7 +1686,7 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
     this.addSettingTab(new FootnoteCompassSettingTab(this.app, this));
     this.registerEditorExtension([annotationField, createDeletionLockExtension(this), createCopyInterceptorExtension()]);
     this.registerView(VIEW_TYPE_FOOTNOTE, (leaf) => new FootnoteListView(leaf, this));
-    this.addRibbonIcon("message-circle-more", "\u6253\u5F00\u811A\u6CE8\u4E0E\u6807\u6CE8\u9762\u677F", () => {
+    this.addRibbonIcon("message-circle-more", "\u6253\u5F00\u6807\u6CE8\u9762\u677F", () => {
       this.activateView();
     });
     const debouncedOutlineUpdate = (0, import_obsidian.debounce)(() => {

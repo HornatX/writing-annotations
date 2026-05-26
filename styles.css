@@ -52,6 +52,7 @@
 .annotation-phantom {
     cursor: default;
     font-size: inherit;
+    white-space: pre-wrap; /* ✨ 新增：让正文变体支持多行显示 */
 }
 
 /* =========================================
@@ -190,11 +191,12 @@
 .annotation-comment-text {
     flex: 1;
     font-size: 16px;
-    /* 👈 移除了变量，改回 16px */
     line-height: 1.4;
     color: var(--text-muted);
     user-select: none;
     transition: all 0.2s ease;
+    white-space: pre-wrap; /* ✨ 新增：让侧边栏变体支持多行显示 */
+    word-break: break-all; /* ✨ 新增：防止长连串英文字母不换行撑破卡片 */
 }
 
 /* =========================================
