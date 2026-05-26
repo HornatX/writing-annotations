@@ -370,6 +370,18 @@ var AnnotationManager = class {
     if (!this.isLoaded) return;
     const path = (0, import_obsidian.normalizePath)(this.plugin.settings.annotationFilePath);
     let file = this.plugin.app.vault.getAbstractFileByPath(path);
+    if (file instanceof import_obsidian.TFile) {
+      let currentTotal = 0;
+      Object.values(this.data).forEach((arr) => currentTotal += (arr || []).length);
+      if (currentTotal === 0) {
+        const oldContent = await this.plugin.app.vault.read(file);
+        if (oldContent.length > 300 && oldContent.includes('"id":')) {
+          console.error("\u{1F6A8} \u81F4\u547D\u62E6\u622A\uFF1A\u89E6\u53D1\u4E86\u6570\u636E\u6E05\u7A7A Bug\uFF01\u5DF2\u7269\u7406\u963B\u65AD\u4FDD\u5B58\u3002");
+          new import_obsidian.Notice("\u{1F6A8} \u81F4\u547D\u5F02\u5E38\u62E6\u622A\uFF1A\u63D2\u4EF6\u68C0\u6D4B\u5230\u8BD5\u56FE\u6E05\u7A7A\u5168\u90E8\u6570\u636E\uFF01\n\u4E3A\u4FDD\u62A4\u60A8\u7684\u5FC3\u8840\uFF0C\u5DF2\u5F3A\u884C\u4E2D\u6B62\u4FDD\u5B58\uFF01", 15e3);
+          return;
+        }
+      }
+    }
     const jsonStr = JSON.stringify(this.data, (key, value) => {
       if (key === "el" || key === "_tempOffset" || key === "_exportOffset") return void 0;
       return value;
@@ -388,11 +400,14 @@ ${newBlock}
       if (file instanceof import_obsidian.TFile) {
         await this.plugin.app.vault.process(file, (data) => {
           const regexNew = /<!-- FC_DATA_START -->\r?\n```json\r?\n([\s\S]*?)\r?\n```\r?\n<!-- FC_DATA_END -->/;
-          const regexOld = /```json\r?\n([\s\S]*?)\r?\n```/;
-          if (data.match(regexNew)) return data.replace(regexNew, () => newBlock);
-          if (data.match(regexOld)) return data.replace(regexOld, () => newBlock);
-          if (data.trim().length === 0) return defaultContent;
-          else return data.replace(/\s+$/, "") + "\n\n" + newBlock + "\n";
+          if (data.match(regexNew)) {
+            return data.replace(regexNew, () => newBlock);
+          }
+          if (data.trim().length === 0) {
+            return defaultContent;
+          } else {
+            return data.replace(/\s+$/, "") + "\n\n" + newBlock + "\n";
+          }
         });
       } else {
         await this.plugin.app.vault.create(path, defaultContent);

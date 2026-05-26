@@ -512,6 +512,28 @@ class AnnotationManager {
         const path = normalizePath(this.plugin.settings.annotationFilePath);
         let file = this.plugin.app.vault.getAbstractFileByPath(path);
 
+        // ==========================================
+        // 🛡️ 终极防空 Bug 拦截器：防止插件把你的数据写成白板
+        // ==========================================
+        if (file instanceof TFile) {
+            // 1. 算一下当前内存里打算保存多少条标注
+            let currentTotal = 0;
+            Object.values(this.data).forEach(arr => currentTotal += (arr || []).length);
+
+            // 2. 如果内存里居然一条数据都没有了（可能是触发了极其严重的 Bug）
+            if (currentTotal === 0) {
+                // 读取一下硬盘上现有的原文件
+                const oldContent = await this.plugin.app.vault.read(file);
+                // 3. 如果原文件体积大于 300 字符，且包含了 "id":（说明原来明明有大量数据）
+                if (oldContent.length > 300 && oldContent.includes('"id":')) {
+                    console.error("🚨 致命拦截：触发了数据清空 Bug！已物理阻断保存。");
+                    new Notice("🚨 致命异常拦截：插件检测到试图清空全部数据！\n为保护您的心血，已强行中止保存！", 15000);
+                    return; // 🛑 直接阻断运行，不准覆盖硬盘！！！
+                }
+            }
+        }
+        // ==========================================
+
         const jsonStr = JSON.stringify(this.data, (key, value) => {
             if (key === 'el' || key === '_tempOffset' || key === '_exportOffset') return undefined;
             return value;
@@ -524,11 +546,21 @@ class AnnotationManager {
             if (file instanceof TFile) {
                 await this.plugin.app.vault.process(file, (data) => {
                     const regexNew = /<!-- FC_DATA_START -->\r?\n```json\r?\n([\s\S]*?)\r?\n```\r?\n<!-- FC_DATA_END -->/;
-                    const regexOld = /```json\r?\n([\s\S]*?)\r?\n```/;
-                    if (data.match(regexNew)) return data.replace(regexNew, () => newBlock);
-                    if (data.match(regexOld)) return data.replace(regexOld, () => newBlock);
-                    if (data.trim().length === 0) return defaultContent;
-                    else return data.replace(/\s+$/, "") + "\n\n" + newBlock + "\n";
+
+                    // 1. 只有在格式 100% 完美无损的情况下，才进行精准覆盖当前块
+                    if (data.match(regexNew)) {
+                        return data.replace(regexNew, () => newBlock);
+                    }
+
+                    // 2. 只要格式出现任何残缺、找不到完美首尾标签（即出现错误）
+                    // 绝不去尝试正则模糊替换！绝对不碰原有的任何文本！
+                    // 直接在整个文档的最最下方，追加全新的数据块！
+                    if (data.trim().length === 0) {
+                        return defaultContent;
+                    } else {
+                        // 清理掉末尾多余的空白符，严格空出两行，然后追加新块
+                        return data.replace(/\s+$/, "") + "\n\n" + newBlock + "\n";
+                    }
                 });
             } else {
                 await this.plugin.app.vault.create(path, defaultContent);
