@@ -6,7 +6,7 @@
 > QQ交流群: 1094620986  
 > 本插件专为小说大纲、剧本分支等设计，建议在正常长度的文档中使用，超大长篇可能需要注意性能。
 
-[👇 English Instructions below](#🇬🇧 English)
+[English](#🇬🇧 English)
 
 ---
 
