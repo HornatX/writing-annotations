@@ -32,8 +32,8 @@ export interface FootnoteCompassSettings {
     flashingColor: string;     // 👈 新增：选区高亮颜色
 
     // 👇 新增备份相关的三个字段
-    maxBackups: number;          // 最大备份份数 (5-50)
-    backupIntervalHours: number; // 备份间隔时间(小时)
+    maxBackups: number;          // 最大备份份数 (20-100)
+    backupIntervalMinutes: number; // 备份间隔时间(分钟)
     lastBackupTime: number;
     recentIcons: string[]; // ✨ 新增：保存最近使用的图标
 
@@ -545,7 +545,7 @@ class AnnotationManager {
     // ✨ 终极保命机制：静默滚动备份引擎
     async _processBackup(defaultContent: string, newBlock: string, originalFile: TFile | null) {
         const now = Date.now();
-        const intervalMs = this.plugin.settings.backupIntervalHours * 60 * 60 * 1000;
+        const intervalMs = this.plugin.settings.backupIntervalMinutes * 60 * 1000;
 
         // 如果距离上次备份还没超过设定的冷却时间，直接退出，不备
         if (now - this.plugin.settings.lastBackupTime < intervalMs) return;
@@ -2011,23 +2011,23 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
         });
 
         new Setting(containerEl)
-            .setName("自动备份冷却时间 (小时)")
-            .setDesc("当您有修改发生时，至少间隔多少小时才生成一份新备份。(建议: 1-2小时)")
+            .setName("自动备份冷却时间 (分钟)")
+            .setDesc("当您有修改发生时，至少间隔多少分钟才生成一份新备份。(建议: 1-60分钟)")
             .addSlider(slider => slider
-                .setLimits(1, 24, 1)
-                .setValue(this.plugin.settings.backupIntervalHours)
+                .setLimits(1, 60, 1)
+                .setValue(this.plugin.settings.backupIntervalMinutes)
                 .setDynamicTooltip()
                 .onChange(async (val) => {
-                    this.plugin.settings.backupIntervalHours = val;
+                    this.plugin.settings.backupIntervalMinutes = val;
                     await this.plugin.saveSettings();
                 })
             );
 
         new Setting(containerEl)
             .setName("最多保留历史份数")
-            .setDesc("超过此份数时，将自动删除最老的一份备份。(范围: 5 ~ 50份)")
+            .setDesc("超过此份数时，将自动删除最老的一份备份。(范围: 20 ~ 100份)")
             .addSlider(slider => slider
-                .setLimits(5, 50, 1)
+                .setLimits(20, 100, 1)
                 .setValue(this.plugin.settings.maxBackups)
                 .setDynamicTooltip()
                 .onChange(async (val) => {
@@ -2133,8 +2133,8 @@ export default class FootnoteCompassPlugin extends Plugin {
             iconOffsetY: 0,    // ✨ 新增：默认微调为 0
             recentIcons: [], // ✨ 新增：默认初始化为空
 
-            maxBackups: 20,           // 默认保存 20 份
-            backupIntervalHours: 1,   // 默认 1 小时冷却时间
+            maxBackups: 40,           // 默认保存 40 份
+            backupIntervalMinutes: 1, // 默认 1 分钟冷却时间
             lastBackupTime: 0         // 初始时间为 0
         }, loadedData);
 

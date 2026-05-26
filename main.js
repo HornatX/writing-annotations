@@ -405,7 +405,7 @@ ${newBlock}
   // ✨ 终极保命机制：静默滚动备份引擎
   async _processBackup(defaultContent, newBlock, originalFile) {
     const now = Date.now();
-    const intervalMs = this.plugin.settings.backupIntervalHours * 60 * 60 * 1e3;
+    const intervalMs = this.plugin.settings.backupIntervalMinutes * 60 * 1e3;
     if (now - this.plugin.settings.lastBackupTime < intervalMs) return;
     try {
       const fullContentToBackup = originalFile ? await this.plugin.app.vault.read(originalFile) : defaultContent;
@@ -1572,14 +1572,14 @@ var FootnoteCompassSettingTab = class extends import_obsidian.PluginSettingTab {
       text: "\u4E13\u4E3A\u5C0F\u8BF4\u5927\u7EB2\u7B49\u9AD8\u4EF7\u503C\u6570\u636E\u8BBE\u8BA1\u7684\u4FDD\u547D\u673A\u5236\u3002\u63D2\u4EF6\u4F1A\u5728\u540E\u53F0\u9759\u9ED8\u8BB0\u5F55\u60A8\u7684\u5386\u53F2\u7248\u672C\uFF0C\u4EE5\u9632\u8BEF\u5220\u6216\u540C\u6B65\u76D8\u5F15\u53D1\u7684\u6587\u4EF6\u635F\u574F\u3002",
       cls: "setting-item-description"
     });
-    new import_obsidian.Setting(containerEl).setName("\u81EA\u52A8\u5907\u4EFD\u51B7\u5374\u65F6\u95F4 (\u5C0F\u65F6)").setDesc("\u5F53\u60A8\u6709\u4FEE\u6539\u53D1\u751F\u65F6\uFF0C\u81F3\u5C11\u95F4\u9694\u591A\u5C11\u5C0F\u65F6\u624D\u751F\u6210\u4E00\u4EFD\u65B0\u5907\u4EFD\u3002(\u5EFA\u8BAE: 1-2\u5C0F\u65F6)").addSlider(
-      (slider) => slider.setLimits(1, 24, 1).setValue(this.plugin.settings.backupIntervalHours).setDynamicTooltip().onChange(async (val) => {
-        this.plugin.settings.backupIntervalHours = val;
+    new import_obsidian.Setting(containerEl).setName("\u81EA\u52A8\u5907\u4EFD\u51B7\u5374\u65F6\u95F4 (\u5206\u949F)").setDesc("\u5F53\u60A8\u6709\u4FEE\u6539\u53D1\u751F\u65F6\uFF0C\u81F3\u5C11\u95F4\u9694\u591A\u5C11\u5206\u949F\u624D\u751F\u6210\u4E00\u4EFD\u65B0\u5907\u4EFD\u3002(\u5EFA\u8BAE: 1-60\u5206\u949F)").addSlider(
+      (slider) => slider.setLimits(1, 60, 1).setValue(this.plugin.settings.backupIntervalMinutes).setDynamicTooltip().onChange(async (val) => {
+        this.plugin.settings.backupIntervalMinutes = val;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("\u6700\u591A\u4FDD\u7559\u5386\u53F2\u4EFD\u6570").setDesc("\u8D85\u8FC7\u6B64\u4EFD\u6570\u65F6\uFF0C\u5C06\u81EA\u52A8\u5220\u9664\u6700\u8001\u7684\u4E00\u4EFD\u5907\u4EFD\u3002(\u8303\u56F4: 5 ~ 50\u4EFD)").addSlider(
-      (slider) => slider.setLimits(5, 50, 1).setValue(this.plugin.settings.maxBackups).setDynamicTooltip().onChange(async (val) => {
+    new import_obsidian.Setting(containerEl).setName("\u6700\u591A\u4FDD\u7559\u5386\u53F2\u4EFD\u6570").setDesc("\u8D85\u8FC7\u6B64\u4EFD\u6570\u65F6\uFF0C\u5C06\u81EA\u52A8\u5220\u9664\u6700\u8001\u7684\u4E00\u4EFD\u5907\u4EFD\u3002(\u8303\u56F4: 20 ~ 100\u4EFD)").addSlider(
+      (slider) => slider.setLimits(20, 100, 1).setValue(this.plugin.settings.maxBackups).setDynamicTooltip().onChange(async (val) => {
         this.plugin.settings.maxBackups = val;
         await this.plugin.saveSettings();
       })
@@ -1675,10 +1675,10 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
       // ✨ 新增：默认微调为 0
       recentIcons: [],
       // ✨ 新增：默认初始化为空
-      maxBackups: 20,
-      // 默认保存 20 份
-      backupIntervalHours: 1,
-      // 默认 1 小时冷却时间
+      maxBackups: 40,
+      // 默认保存 40 份
+      backupIntervalMinutes: 1,
+      // 默认 1 分钟冷却时间
       lastBackupTime: 0
       // 初始时间为 0
     }, loadedData);
