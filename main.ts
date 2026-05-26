@@ -213,8 +213,8 @@ class PhantomWidget extends WidgetType {
         span.onmousedown = (e: MouseEvent) => {
             // 🛑 核心修复：阻止浏览器的默认点击行为！
             // 防止浏览器把光标强行塞入 atomicRange 导致 CM6 状态树崩溃（光标消失）
-            e.preventDefault(); 
-            
+            e.preventDefault();
+
             // 🛑 核心修复：手动夺回焦点，并将光标安全地放在这个高亮块的前面
             view.focus();
             const pos = view.posAtDOM(span);
@@ -283,7 +283,7 @@ function createDeletionLockExtension(plugin: FootnoteCompassPlugin) {
     });
 }
 
-    // ✨ 新增：CM6 复制/剪切拦截器（实现“所见即所得”的复制）
+// ✨ 新增：CM6 复制/剪切拦截器（实现“所见即所得”的复制）
 function createCopyInterceptorExtension() {
     return EditorView.domEventHandlers({
         copy: (event: ClipboardEvent, view: EditorView) => {
@@ -339,12 +339,12 @@ function createCopyInterceptorExtension() {
             if (event.clipboardData) {
                 event.clipboardData.setData('text/plain', finalText);
                 event.preventDefault();
-                return true; 
+                return true;
             }
 
             return false;
         },
-        
+
         cut: (event: ClipboardEvent, view: EditorView) => {
             const ranges = view.state.selection.ranges;
             const decos = view.state.field(annotationField, false);
@@ -383,9 +383,9 @@ function createCopyInterceptorExtension() {
             if (event.clipboardData) {
                 event.clipboardData.setData('text/plain', finalText);
                 event.preventDefault();
-                
+
                 // 执行剪切动作（它会安全地触发保护机制或删除文本）
-                let changes = ranges.map(r => ({from: r.from, to: r.to}));
+                let changes = ranges.map(r => ({ from: r.from, to: r.to }));
                 view.dispatch({
                     changes: changes,
                     userEvent: "delete.cut"
@@ -923,7 +923,7 @@ class FootnoteListView extends ItemView {
     }
 
     getViewType() { return VIEW_TYPE_FOOTNOTE; }
-    getDisplayText() { return "脚注 & 变体大纲"; }
+    getDisplayText() { return "小说标注分支大纲"; }
     getIcon() { return "message-circle-more"; }
 
     async onOpen() {
@@ -1084,12 +1084,15 @@ class FootnoteListView extends ItemView {
             if (!cleanLine.includes('[')) return;
             if (cleanLine.startsWith('[^') && cleanLine.includes(']:')) return;
 
+            // ✨ 屏蔽：不再从正文中扫描脚注，从源头掐断
+            /*
             let fMatch;
             while ((fMatch = footRefRegex.exec(cleanLine)) !== null) {
                 this.cachedRefs.push({
                     type: 'footnote', key: fMatch[1], content: definitionMap.get(fMatch[1]) || "(未定义)", line: lineIndex, col: fMatch.index, len: fMatch[0].length, el: null
                 });
             }
+            */
         });
 
         const annos = this.plugin.annoManager.data[view.file?.path || ""] || [];
@@ -1636,28 +1639,16 @@ class FootnoteListView extends ItemView {
 
     showContextMenu(e: MouseEvent, ref: FootnoteRef | null = null) {
         const menu = new Menu();
+
         if (ref) {
             menu.addItem((item) => item.setTitle(ref.type === 'footnote' ? "编辑脚注 (未实现)" : "编辑注记").setIcon("pencil"));
             menu.addSeparator();
         }
-        menu.addItem((item) => {
-            item.setTitle("数字排序 (针对脚注)").setIcon("sort-asc").setChecked(this.plugin.settings.isSortByKey).onClick(async () => {
-                this.plugin.settings.isSortByKey = !this.plugin.settings.isSortByKey;
-                await this.plugin.saveSettings();
-                this._lastStateHash = ""; this.checkAndUpdate();
-            });
-        });
-        menu.addItem((item) => {
-            item.setTitle("脚注美化").setIcon("wand-2").setChecked(this.plugin.settings.beautifyEnabled)
-                .onClick(async () => {
-                    this.plugin.settings.beautifyEnabled = !this.plugin.settings.beautifyEnabled;
-                    await this.plugin.saveSettings(); this.plugin.applyBeautifyStyle();
-                });
-        });
-        menu.addSeparator();
+
         menu.addItem((item) => {
             item.setTitle("导出当前变体全文").setIcon("file-output").onClick(async () => await this.exportVariantFile());
         });
+
         menu.showAtMouseEvent(e);
     }
 
@@ -1729,7 +1720,7 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
     display() {
         const { containerEl } = this;
         containerEl.empty();
-        containerEl.createEl("h2", { text: "脚注与标注大纲 设置" });
+        containerEl.createEl("h2", { text: "标注大纲 设置" });
 
         const DEFAULT_FILE = "大纲变体标注数据库.md"; // 统一声明默认常量，防止打错字
 
@@ -2131,7 +2122,7 @@ export default class FootnoteCompassPlugin extends Plugin {
         this.addSettingTab(new FootnoteCompassSettingTab(this.app, this));
         this.registerEditorExtension([annotationField, createDeletionLockExtension(this), createCopyInterceptorExtension()]);
         this.registerView(VIEW_TYPE_FOOTNOTE, (leaf) => new FootnoteListView(leaf, this));
-        this.addRibbonIcon('message-circle-more', '打开脚注与标注面板', () => { this.activateView(); });
+        this.addRibbonIcon('message-circle-more', '打开标注面板', () => { this.activateView(); });
 
         // 1. 保留给【打字】用的防抖（0.5秒延迟，防止打字卡顿）
         const debouncedOutlineUpdate = debounce(() => {

@@ -826,18 +826,6 @@ var FootnoteListView = class extends import_obsidian.ItemView {
       let cleanLine = line.replace(/`[^`\n]+`/g, (match) => " ".repeat(match.length));
       if (!cleanLine.includes("[")) return;
       if (cleanLine.startsWith("[^") && cleanLine.includes("]:")) return;
-      let fMatch;
-      while ((fMatch = footRefRegex.exec(cleanLine)) !== null) {
-        this.cachedRefs.push({
-          type: "footnote",
-          key: fMatch[1],
-          content: definitionMap.get(fMatch[1]) || "(\u672A\u5B9A\u4E49)",
-          line: lineIndex,
-          col: fMatch.index,
-          len: fMatch[0].length,
-          el: null
-        });
-      }
     });
     const annos = this.plugin.annoManager.data[view.file?.path || ""] || [];
     const currentHash = this.generateStateHash(view, this.cachedRefs, annos);
@@ -1308,22 +1296,6 @@ var FootnoteListView = class extends import_obsidian.ItemView {
       menu.addItem((item) => item.setTitle(ref.type === "footnote" ? "\u7F16\u8F91\u811A\u6CE8 (\u672A\u5B9E\u73B0)" : "\u7F16\u8F91\u6CE8\u8BB0").setIcon("pencil"));
       menu.addSeparator();
     }
-    menu.addItem((item) => {
-      item.setTitle("\u6570\u5B57\u6392\u5E8F (\u9488\u5BF9\u811A\u6CE8)").setIcon("sort-asc").setChecked(this.plugin.settings.isSortByKey).onClick(async () => {
-        this.plugin.settings.isSortByKey = !this.plugin.settings.isSortByKey;
-        await this.plugin.saveSettings();
-        this._lastStateHash = "";
-        this.checkAndUpdate();
-      });
-    });
-    menu.addItem((item) => {
-      item.setTitle("\u811A\u6CE8\u7F8E\u5316").setIcon("wand-2").setChecked(this.plugin.settings.beautifyEnabled).onClick(async () => {
-        this.plugin.settings.beautifyEnabled = !this.plugin.settings.beautifyEnabled;
-        await this.plugin.saveSettings();
-        this.plugin.applyBeautifyStyle();
-      });
-    });
-    menu.addSeparator();
     menu.addItem((item) => {
       item.setTitle("\u5BFC\u51FA\u5F53\u524D\u53D8\u4F53\u5168\u6587").setIcon("file-output").onClick(async () => await this.exportVariantFile());
     });
