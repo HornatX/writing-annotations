@@ -2258,7 +2258,7 @@ export default class FootnoteCompassPlugin extends Plugin {
         this.registerEvent(this.app.workspace.on('editor-menu', (menu, editor, view) => {
             if (editor.somethingSelected()) {
                 menu.addItem((item) => {
-                    item.setTitle("添加正文变体标注").setIcon("pin").onClick(async () => {
+                    item.setTitle("添加分支标注").setIcon("pin").onClick(async () => {
                         const selectedText = editor.getSelection();
                         if (!selectedText || selectedText.trim().length === 0) {
                             new Notice("无法对空字符添加标注！");

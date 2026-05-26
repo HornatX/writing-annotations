@@ -1772,7 +1772,7 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
     this.registerEvent(this.app.workspace.on("editor-menu", (menu, editor, view) => {
       if (editor.somethingSelected()) {
         menu.addItem((item) => {
-          item.setTitle("\u6DFB\u52A0\u6B63\u6587\u53D8\u4F53\u6807\u6CE8").setIcon("pin").onClick(async () => {
+          item.setTitle("\u6DFB\u52A0\u5206\u652F\u6807\u6CE8").setIcon("pin").onClick(async () => {
             const selectedText = editor.getSelection();
             if (!selectedText || selectedText.trim().length === 0) {
               new import_obsidian.Notice("\u65E0\u6CD5\u5BF9\u7A7A\u5B57\u7B26\u6DFB\u52A0\u6807\u6CE8\uFF01");
