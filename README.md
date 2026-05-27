@@ -102,8 +102,6 @@
 
 ---
 
-## <br><br>
-
 ## 🇬🇧 English
 
 **Variant Compass** is a powerful, specialized Obsidian plugin designed for novelists, scriptwriters, and content creators. It provides an elegant sidebar outline to manage, preview, and export alternative text variants (revisions, dialogue choices, or plot branches) seamlessly without cluttering your original manuscript.
