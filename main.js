@@ -169,6 +169,9 @@ function createDeletionLockExtension(plugin) {
     if (!tr.docChanged) return tr;
     if (!plugin.settings.lockDeletion) return tr;
     if (plugin.isPluginModifying) return tr;
+    const userEvent = tr.annotation(import_state.Transaction.userEvent);
+    const isUserInput = userEvent && (userEvent.startsWith("input") || userEvent.startsWith("delete") || userEvent.startsWith("paste") || userEvent.startsWith("drop") || userEvent.startsWith("undo") || userEvent.startsWith("redo"));
+    if (!isUserInput) return tr;
     const decos = tr.startState.field(annotationField, false);
     if (!decos) return tr;
     let blocked = false;
@@ -1804,6 +1807,21 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
               return;
             }
             const lineText = editor.getLine(cursorFrom.line);
+            const linkRegex = /\[\[.*?\]\]/g;
+            let match;
+            let isIntersectingLink = false;
+            while ((match = linkRegex.exec(lineText)) !== null) {
+              const linkStart = match.index;
+              const linkEnd = linkStart + match[0].length;
+              if (Math.max(cursorFrom.ch, linkStart) < Math.min(cursorTo.ch, linkEnd)) {
+                isIntersectingLink = true;
+                break;
+              }
+            }
+            if (isIntersectingLink) {
+              new import_obsidian.Notice("\u26A0\uFE0F \u65E0\u6CD5\u6DFB\u52A0\u6807\u6CE8\uFF1A\u9009\u4E2D\u7684\u6587\u672C\u5305\u542B\u6216\u5C5E\u4E8E\u53CC\u94FE\u63A5 [[ ]]\uFF01\n\u4E3A\u9632\u6B62\u94FE\u63A5\u5931\u6548\uFF0C\u8BF7\u907F\u5F00\u53CC\u94FE\u63A5\u8FDB\u884C\u6807\u6CE8\u3002");
+              return;
+            }
             const prefix = lineText.substring(Math.max(0, cursorFrom.ch - 30), cursorFrom.ch);
             const suffix = lineText.substring(cursorTo.ch, Math.min(lineText.length, cursorTo.ch + 30));
             const path = view.file.path;

@@ -258,6 +258,21 @@ function createDeletionLockExtension(plugin: FootnoteCompassPlugin) {
         if (!plugin.settings.lockDeletion) return tr; // 如果设置里关了，直接放行
         if (plugin.isPluginModifying) return tr; // ✨ 特权放行：如果是插件自己在改原文，放行
 
+        // 🌟 核心修复：只拦截“人类真实键盘/鼠标操作”
+        // 过滤掉 Obsidian 后台自动更新双链(重命名文件API)等无 userEvent 的程序操作
+        const userEvent = tr.annotation(Transaction.userEvent);
+        const isUserInput = userEvent && (
+            userEvent.startsWith("input") || 
+            userEvent.startsWith("delete") || 
+            userEvent.startsWith("paste") || 
+            userEvent.startsWith("drop") ||
+            userEvent.startsWith("undo") || 
+            userEvent.startsWith("redo")
+        );
+
+        // 如果是 Obsidian 程序在后台修改（重命名触发的自动更新），直接放行不拦截！
+        if (!isUserInput) return tr; 
+
         // 获取当前所有的保护区域
         const decos = tr.startState.field(annotationField, false);
         if (!decos) return tr;
@@ -2312,6 +2327,28 @@ export default class FootnoteCompassPlugin extends Plugin {
                         }
 
                         const lineText = editor.getLine(cursorFrom.line);
+
+                        // 🌟 核心新增：检查选中的文本是否包含了双链，或者被双链包含
+                        const linkRegex = /\[\[.*?\]\]/g;
+                        let match;
+                        let isIntersectingLink = false;
+                        while ((match = linkRegex.exec(lineText)) !== null) {
+                            const linkStart = match.index;
+                            const linkEnd = linkStart + match[0].length;
+                            
+                            // 数学碰撞检测：如果 选区区间 和 双链区间 有任何重叠
+                            if (Math.max(cursorFrom.ch, linkStart) < Math.min(cursorTo.ch, linkEnd)) {
+                                isIntersectingLink = true;
+                                break;
+                            }
+                        }
+
+                        // 如果碰到了双链，直接拦截并弹窗警告！
+                        if (isIntersectingLink) {
+                            new Notice("⚠️ 无法添加标注：选中的文本包含或属于双链接 [[ ]]！\n为防止链接失效，请避开双链接进行标注。");
+                            return;
+                        }
+
                         // 安全截取前后文
                         const prefix = lineText.substring(Math.max(0, cursorFrom.ch - 30), cursorFrom.ch);
                         const suffix = lineText.substring(cursorTo.ch, Math.min(lineText.length, cursorTo.ch + 30));
