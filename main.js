@@ -733,7 +733,7 @@ var FootnoteListView = class extends import_obsidian.ItemView {
     return "\u5C0F\u8BF4\u6807\u6CE8\u5206\u652F\u5927\u7EB2";
   }
   getIcon() {
-    return "message-circle-more";
+    return "split";
   }
   async onOpen() {
     const container = this.containerEl.children[1];
@@ -1379,10 +1379,11 @@ var FootnoteCompassSettingTab = class extends import_obsidian.PluginSettingTab {
     this.plugin = plugin;
   }
   // ✨ 需求 1：辅助函数，用于改变设置后强制侧边栏视图立刻刷新
+  // ✅ 修复后的代码
   forceRefreshSidebar() {
     this.plugin.app.workspace.getLeavesOfType(VIEW_TYPE_FOOTNOTE).forEach((leaf) => {
       const view = leaf.view;
-      if (view) {
+      if (view && typeof view.checkAndUpdate === "function") {
         view._lastStateHash = "";
         view.checkAndUpdate();
       }
@@ -1704,14 +1705,24 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
     this.addSettingTab(new FootnoteCompassSettingTab(this.app, this));
     this.registerEditorExtension([annotationField, createDeletionLockExtension(this), createCopyInterceptorExtension()]);
     this.registerView(VIEW_TYPE_FOOTNOTE, (leaf) => new FootnoteListView(leaf, this));
-    this.addRibbonIcon("message-circle-more", "\u6253\u5F00\u6807\u6CE8\u9762\u677F", () => {
+    this.addRibbonIcon("split", "\u6253\u5F00\u6807\u6CE8\u9762\u677F", () => {
       this.activateView();
     });
     const debouncedOutlineUpdate = (0, import_obsidian.debounce)(() => {
-      this.app.workspace.getLeavesOfType(VIEW_TYPE_FOOTNOTE).forEach((leaf) => leaf.view?.checkAndUpdate());
+      this.app.workspace.getLeavesOfType(VIEW_TYPE_FOOTNOTE).forEach((leaf) => {
+        const view = leaf.view;
+        if (view && typeof view.checkAndUpdate === "function") {
+          view.checkAndUpdate();
+        }
+      });
     }, 500, true);
     const fastOutlineUpdate = (0, import_obsidian.debounce)(() => {
-      this.app.workspace.getLeavesOfType(VIEW_TYPE_FOOTNOTE).forEach((leaf) => leaf.view?.checkAndUpdate());
+      this.app.workspace.getLeavesOfType(VIEW_TYPE_FOOTNOTE).forEach((leaf) => {
+        const view = leaf.view;
+        if (view && typeof view.checkAndUpdate === "function") {
+          view.checkAndUpdate();
+        }
+      });
     }, 50, true);
     this.registerEvent(this.app.workspace.on("active-leaf-change", () => {
       fastOutlineUpdate();
@@ -1790,7 +1801,7 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
     this.registerEvent(this.app.workspace.on("editor-menu", (menu, editor, view) => {
       if (editor.somethingSelected()) {
         menu.addItem((item) => {
-          item.setTitle("\u6DFB\u52A0\u5206\u652F\u6807\u6CE8").setIcon("pin").onClick(async () => {
+          item.setTitle("\u6DFB\u52A0\u5206\u652F\u6807\u6CE8").setIcon("highlighter").onClick(async () => {
             const selectedText = editor.getSelection();
             if (!selectedText || selectedText.trim().length === 0) {
               new import_obsidian.Notice("\u65E0\u6CD5\u5BF9\u7A7A\u5B57\u7B26\u6DFB\u52A0\u6807\u6CE8\uFF01");
@@ -1830,7 +1841,10 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
             this.annoManager.data[path].push({ id: generateUUID(), original: selectedText, prefix, suffix, expectedOffset, comments: [] });
             await this.annoManager.save();
             const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_FOOTNOTE)[0];
-            if (leaf && leaf.view instanceof FootnoteListView) leaf.view._lastStateHash = "";
+            const sidebarView = leaf?.view;
+            if (sidebarView && typeof sidebarView.checkAndUpdate === "function") {
+              sidebarView._lastStateHash = "";
+            }
             updateEditorDecorations(this);
             this.activateView();
           });
@@ -1863,6 +1877,7 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
       await this.annoManager.forceSave();
     }
   }
+  // ✅ 修复后的代码
   async activateView() {
     let leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_FOOTNOTE)[0];
     if (!leaf) {
@@ -1870,6 +1885,9 @@ var FootnoteCompassPlugin = class extends import_obsidian.Plugin {
       await leaf.setViewState({ type: VIEW_TYPE_FOOTNOTE, active: true });
     }
     this.app.workspace.revealLeaf(leaf);
-    if (leaf.view instanceof FootnoteListView) leaf.view.checkAndUpdate();
+    const view = leaf.view;
+    if (view && typeof view.checkAndUpdate === "function") {
+      view.checkAndUpdate();
+    }
   }
 };

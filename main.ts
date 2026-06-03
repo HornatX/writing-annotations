@@ -262,16 +262,16 @@ function createDeletionLockExtension(plugin: FootnoteCompassPlugin) {
         // 过滤掉 Obsidian 后台自动更新双链(重命名文件API)等无 userEvent 的程序操作
         const userEvent = tr.annotation(Transaction.userEvent);
         const isUserInput = userEvent && (
-            userEvent.startsWith("input") || 
-            userEvent.startsWith("delete") || 
-            userEvent.startsWith("paste") || 
+            userEvent.startsWith("input") ||
+            userEvent.startsWith("delete") ||
+            userEvent.startsWith("paste") ||
             userEvent.startsWith("drop") ||
-            userEvent.startsWith("undo") || 
+            userEvent.startsWith("undo") ||
             userEvent.startsWith("redo")
         );
 
         // 如果是 Obsidian 程序在后台修改（重命名触发的自动更新），直接放行不拦截！
-        if (!isUserInput) return tr; 
+        if (!isUserInput) return tr;
 
         // 获取当前所有的保护区域
         const decos = tr.startState.field(annotationField, false);
@@ -984,7 +984,7 @@ class FootnoteListView extends ItemView {
 
     getViewType() { return VIEW_TYPE_FOOTNOTE; }
     getDisplayText() { return "小说标注分支大纲"; }
-    getIcon() { return "message-circle-more"; }
+    getIcon() { return "split"; }
 
     async onOpen() {
         const container = this.containerEl.children[1] as HTMLElement;
@@ -1774,10 +1774,12 @@ class FootnoteCompassSettingTab extends PluginSettingTab {
     }
 
     // ✨ 需求 1：辅助函数，用于改变设置后强制侧边栏视图立刻刷新
+    // ✅ 修复后的代码
     forceRefreshSidebar() {
         this.plugin.app.workspace.getLeavesOfType(VIEW_TYPE_FOOTNOTE).forEach(leaf => {
-            const view = leaf.view as FootnoteListView;
-            if (view) {
+            const view = leaf.view as any;
+            // 增加 typeof 安全判断
+            if (view && typeof view.checkAndUpdate === 'function') {
                 view._lastStateHash = "";
                 view.checkAndUpdate();
             }
@@ -2189,16 +2191,26 @@ export default class FootnoteCompassPlugin extends Plugin {
         this.addSettingTab(new FootnoteCompassSettingTab(this.app, this));
         this.registerEditorExtension([annotationField, createDeletionLockExtension(this), createCopyInterceptorExtension()]);
         this.registerView(VIEW_TYPE_FOOTNOTE, (leaf) => new FootnoteListView(leaf, this));
-        this.addRibbonIcon('message-circle-more', '打开标注面板', () => { this.activateView(); });
+        this.addRibbonIcon('split', '打开标注面板', () => { this.activateView(); });
 
         // 1. 保留给【打字】用的防抖（0.5秒延迟，防止打字卡顿）
+        // ✅ 修复后的代码：增加 typeof 检查，确保方法真实存在
         const debouncedOutlineUpdate = debounce(() => {
-            this.app.workspace.getLeavesOfType(VIEW_TYPE_FOOTNOTE).forEach(leaf => (leaf.view as FootnoteListView)?.checkAndUpdate());
+            this.app.workspace.getLeavesOfType(VIEW_TYPE_FOOTNOTE).forEach(leaf => {
+                const view = leaf.view as any;
+                if (view && typeof view.checkAndUpdate === 'function') {
+                    view.checkAndUpdate();
+                }
+            });
         }, 500, true);
 
-        // 2. 新增给【切换文件】用的快速刷新（50毫秒，几乎感觉不到延迟，但能保证 Obsidian 已经加载好新文件）
         const fastOutlineUpdate = debounce(() => {
-            this.app.workspace.getLeavesOfType(VIEW_TYPE_FOOTNOTE).forEach(leaf => (leaf.view as FootnoteListView)?.checkAndUpdate());
+            this.app.workspace.getLeavesOfType(VIEW_TYPE_FOOTNOTE).forEach(leaf => {
+                const view = leaf.view as any;
+                if (view && typeof view.checkAndUpdate === 'function') {
+                    view.checkAndUpdate();
+                }
+            });
         }, 50, true);
 
         // 3. 切换标签页时，使用极速刷新
@@ -2305,7 +2317,7 @@ export default class FootnoteCompassPlugin extends Plugin {
         this.registerEvent(this.app.workspace.on('editor-menu', (menu, editor, view) => {
             if (editor.somethingSelected()) {
                 menu.addItem((item) => {
-                    item.setTitle("添加分支标注").setIcon("pin").onClick(async () => {
+                    item.setTitle("添加分支标注").setIcon("highlighter").onClick(async () => {
                         const selectedText = editor.getSelection();
                         if (!selectedText || selectedText.trim().length === 0) {
                             new Notice("无法对空字符添加标注！");
@@ -2335,7 +2347,7 @@ export default class FootnoteCompassPlugin extends Plugin {
                         while ((match = linkRegex.exec(lineText)) !== null) {
                             const linkStart = match.index;
                             const linkEnd = linkStart + match[0].length;
-                            
+
                             // 数学碰撞检测：如果 选区区间 和 双链区间 有任何重叠
                             if (Math.max(cursorFrom.ch, linkStart) < Math.min(cursorTo.ch, linkEnd)) {
                                 isIntersectingLink = true;
@@ -2363,7 +2375,10 @@ export default class FootnoteCompassPlugin extends Plugin {
                         await this.annoManager.save();
 
                         const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_FOOTNOTE)[0];
-                        if (leaf && leaf.view instanceof FootnoteListView) leaf.view._lastStateHash = "";
+                        const sidebarView = leaf?.view as any;
+                        if (sidebarView && typeof sidebarView.checkAndUpdate === 'function') {
+                            sidebarView._lastStateHash = "";
+                        }
 
                         updateEditorDecorations(this); this.activateView();
                     });
@@ -2399,6 +2414,7 @@ export default class FootnoteCompassPlugin extends Plugin {
         if (this.annoManager) { await this.annoManager.forceSave(); }
     }
 
+    // ✅ 修复后的代码
     async activateView() {
         let leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_FOOTNOTE)[0];
         if (!leaf) {
@@ -2406,6 +2422,11 @@ export default class FootnoteCompassPlugin extends Plugin {
             await leaf.setViewState({ type: VIEW_TYPE_FOOTNOTE, active: true });
         }
         this.app.workspace.revealLeaf(leaf);
-        if (leaf.view instanceof FootnoteListView) leaf.view.checkAndUpdate();
+
+        // 使用更稳妥的鸭子类型检测，兼容开发模式热重载
+        const view = leaf.view as any;
+        if (view && typeof view.checkAndUpdate === 'function') {
+            view.checkAndUpdate();
+        }
     }
 }
