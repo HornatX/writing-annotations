@@ -1,6 +1,12 @@
 
 # Variant Compass (小说变体与标注大纲)
 
+如果您觉得这款插件对您有帮助，欢迎在小红书（RED）上关注我，我会在那里分享更多技巧、教程和更新。
+
+If you find this plugin helpful, feel free to follow me on Xiaohongshu (RED) where I share more tips, tutorials, and updates.
+
+https://www.xiaohongshu.com/user/profile/6353523d000000001802f8ae?xsec_token=YB4vLkLfzOijtg8c1Vh12ZASaI1ByqPPYi82ZzKbG72qE=&xsec_source=app_share&xhsshare=QQ&appuid=6353523d000000001802f8ae&apptime=1780631605&share_id=3846902afcd94e2ab78467cd7b9b5669
+
 > **💡 温馨提示 / Notice:**  
 > 插件还在测试当中，欢迎加群讨论反馈！  
 > QQ交流群: 1094620986  
