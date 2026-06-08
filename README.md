@@ -14,7 +14,7 @@
   <img src="assets/演示2.gif" alt="插件演示" />
 </p>
 
-[简体中文](#简体中文) | [用法](#用法) | [English](#english) | [Usage](#usage)
+[简体中文](#简体中文) | [用法](#用法) | [备份系统](#备份系统) | [English](#english) | [Usage](#usage) | [Backup](#backup)
 
 ---
 
@@ -42,6 +42,35 @@
 2. 在 Markdown 文件中选中要标注的文本，右键点击选择"添加分支标注"。
 3. 在侧边栏的标注卡片上右键选择"添加分支"创建新变体，点击变体前的复选框即可切换显示。
 4. 点击标注卡片可跳转到正文对应位置，滚动正文时侧边栏会自动高亮当前视野内的标注。
+
+***
+
+## 备份系统
+
+专为小说大纲等高价值数据设计的保命机制。插件会在后台静默记录您的历史版本，以防误删或同步盘引发的文件损坏。
+
+### 自动备份机制
+
+- **静默运行**：每次标注数据有变更时，插件自动检查是否需要备份，完全无需手动操作
+- **冷却时间**：可自定义两次备份之间的最小间隔（1-60分钟），避免频繁写入
+- **滚动覆盖**：始终保留最近N份备份（默认40份，可设置20-100份），超出时自动删除最老的备份
+- **带时间戳命名**：每份备份文件名包含精确到秒的时间戳（如 `大纲备份_2026-05-24_17-30-15.md`），方便定位
+
+### 数据安全保障
+
+- **原子写入**：使用 Obsidian 官方的 `vault.process` API 进行安全原子写入，防止写入中断导致数据损坏
+- **防清空拦截**：插件内置智能检测机制，当发现异常数据清空时会自动拦截保存操作，保护你的数据不被意外覆盖
+- **自愈搜索**：当文件内容发生变化导致标注位置偏移时，插件会自动搜索并修复标注定位
+- **回收站机制**：删除的标注可移至回收站，支持反悔恢复或彻底删除
+
+### 备份文件位置
+
+备份文件存储在 Obsidian 配置目录下的安全位置：
+```
+.obsidian/plugins/footnote-compass/backups/
+```
+
+在设置页面点击 **"📂 打开备份文件夹"** 按钮可直接打开备份目录。
 
 ***
 
@@ -119,6 +148,35 @@ When copying text with variants, automatically copies the displayed variant cont
 2. Select text in a Markdown file, right-click and choose "Add Branch Annotation".
 3. Right-click on an annotation card in the sidebar to select "Add Branch" and create a new variant. Click the checkbox before a variant to switch display.
 4. Click annotation cards to jump to the corresponding position. Auto-highlight annotations in the sidebar as you scroll through the document.
+
+***
+
+## Backup
+
+A life-saving mechanism designed specifically for high-value data like novel outlines. The plugin silently records your historical versions in the background to prevent data loss from accidental deletion or sync drive corruption.
+
+### Automatic Backup Mechanism
+
+- **Silent Operation**: Every time annotation data changes, the plugin automatically checks if a backup is needed, completely hands-free
+- **Cooldown Period**: Customize the minimum interval between backups (1-60 minutes) to avoid frequent writes
+- **Rolling Retention**: Always keep the most recent N backups (default 40, configurable 20-100), automatically deleting the oldest when exceeded
+- **Timestamped Naming**: Each backup filename includes a timestamp精确到秒 (e.g., `备份_2026-05-24_17-30-15.md`) for easy identification
+
+### Data Safety
+
+- **Atomic Write**: Uses Obsidian's official `vault.process` API for safe atomic writes, preventing data corruption from interrupted writes
+- **Anti-clear Interception**: Built-in smart detection automatically intercepts save operations when abnormal data clearing is detected, protecting your data from accidental overwrites
+- **Self-healing Search**: When file content changes cause annotation position drift, the plugin automatically searches and fixes annotation positioning
+- **Recycle Bin**: Deleted annotations can be moved to trash, supporting recovery or permanent deletion
+
+### Backup File Location
+
+Backup files are stored in a secure location within the Obsidian config directory:
+```
+.obsidian/plugins/footnote-compass/backups/
+```
+
+Click the **"📂 Open Backup Folder"** button in settings to directly open the backup directory.
 
 ***
 
