@@ -1,200 +1,187 @@
+# 📌 小说标注与分支大纲 (Footnote Compass)
 
-# Variant Compass (小说变体与标注大纲)
+一个专为小说创作者设计的 Obsidian 插件，提供强大的文本标注、变体管理和大纲导航功能。帮助你轻松管理小说中的不同版本、分支剧情和角色变体。
 
-如果您觉得这款插件对您有帮助，欢迎在小红书（RED）上关注我，我会在那里分享更多技巧、教程和更新。
+<a href="https://www.xiaohongshu.com/user/profile/6353523d000000001802f8ae?xsec_token=YB4vLkLfzOijtg8c1Vh12ZASaI1ByqPPYi82ZzKbG72qE=&xsec_source=app_share&xsshare=QQ&appuid=6353523d000000001802f8ae&apptime=1780631605&share_id=3846902afcd94e2ab78467cd7b9b5669" target="_blank"><img src="https://img.shields.io/badge/✦_关注小红书-ff2442?style=for-the-badge&logo=xiaohongshu&logoColor=white" alt="关注小红书" height="40" style="border-radius: 8px; box-shadow: 0 2px 4px rgba(33, 31, 32, 0.84);"></a>
 
-If you find this plugin helpful, feel free to follow me on Xiaohongshu (RED) where I share more tips, tutorials, and updates.
-
-https://www.xiaohongshu.com/user/profile/6353523d000000001802f8ae?xsec_token=YB4vLkLfzOijtg8c1Vh12ZASaI1ByqPPYi82ZzKbG72qE=&xsec_source=app_share&xhsshare=QQ&appuid=6353523d000000001802f8ae&apptime=1780631605&share_id=3846902afcd94e2ab78467cd7b9b5669
-
-> **💡 温馨提示 / Notice:**  
-> 插件还在测试当中，欢迎加群讨论反馈！  
-> QQ交流群: 1094620986  
-> 本插件专为小说大纲、剧本分支等设计，建议在正常长度的文档中使用，超大长篇可能需要注意性能。
-
-[English](#🇬🇧 English)
+我在小红书发布了许多 Obsidian 的教程和插件开发进度，你的关注就是对我最大的支持
 
 ---
 
-## 🇨🇳 简体中文
+## ✨ 核心功能
 
-**Variant Compass（小说变体与标注大纲）** 是一款专为小说家、剧本创作者及多版本文档撰写者打造的硬核 Obsidian 辅助插件。它彻底改变了传统的修改方式，帮助您在不破坏原稿的情况下，轻松掌控复杂的叙事分支、备选台词与文稿修订。
+### 1. 智能标注系统
+- **文本标注**：选中任意文本，右键即可添加标注
+- **变体管理**：为每个标注创建多个变体版本（如不同剧情走向、角色台词等）
+- **实时预览**：切换变体时，正文中的文本会实时替换显示
+- **颜色自定义**：支持为标注和变体设置不同颜色，便于区分
 
-### 🌟 核心功能
+### 2. 侧边栏大纲导航
+- **标注列表**：在侧边栏展示当前文档的所有标注
+- **标题分类**：支持按 H1-H6 标题层级分组显示标注
+- **快速跳转**：点击标注卡片即可跳转到正文对应位置
+- **滚动同步**：滚动正文时，侧边栏会自动高亮当前视野内的标注
 
-#### 1. 正文变体标注（多版本情节管理）
+### 3. 数据安全保障
+- **自动备份**：后台静默备份，支持自定义备份间隔和保留份数
+- **锁定保护**：开启后，被标注的原文不可直接删除，防止误操作
+- **回收站机制**：删除的标注可移至回收站，支持恢复或彻底删除
+- **断联修复**：文件移动或重命名后，支持重新关联标注数据
 
-- **框选即添加**：在编辑器中选中任意文本，右击并选择“添加正文变体标注”，即可锁定该段落。
-    
-- **无限平行宇宙**：在锁定的原文下，可在侧边栏中添加多个不同的修改备选、角色台词、或不同的情节走向（即“变体”）。
-    
-- **个性化图标与色彩**：右键侧边栏卡片，可为每条标注分配专属图标（如 💡、⚔️、❤️）和高亮颜色，一眼看清是灵感、战斗还是感情戏。
-    
-
-#### 2. 行内幻影预览（所见即所得）
-
-- **无痕替换**：在侧边栏中勾选某个变体，正文中的原文将动态替换为该变体的精美内联挂件（Phantom Widget）。
-    
-- **智能复制剪切**：当变体生效时，您直接框选正文并复制，系统会自动抓取您替换后的“变体文字”，真正做到所见即所得。
-    
-
-#### 3. 侧边栏高级大纲
-
-- **H1-H6 标题过滤**：大长篇小说必备！可在侧边栏顶部一键筛选，只显示当前章节（如 H2）下的变体标注。
-    
-- **沉浸显示模式**：自由切换卡片标题显示“仅原文本”、“仅分支文本”或“同时显示”。
-    
-- **手风琴式折叠**：支持开启/关闭自动展开模式。关闭时，点击哪张卡片就展开哪张，极大节省侧边栏空间。
-    
-
-#### 4. 终极数据防丢失机制（专为网文作者打造）
-
-- **防误删锁定保护**：被标注的正文将变为“不可删除”受保护状态。彻底杜绝因为误删文字导致数据错位的灾难！（如需删除原文，需先在侧边栏解除标注）。
-    
-- **后台静默滚动备份**：插件每隔几小时会在系统底层自动为您备份整个标注数据库（最多保留 50 份），就算同步盘崩溃也能一键找回心血。
-    
-- **底层映射回收站**：如果因为外部操作导致文件改名或丢失，可在设置面板的“数据库管理器”中重新关联或从回收站恢复数据。
-    
-
-#### 5. 一键导出最终定稿
-
-- 选好了所有的情节分支，想要导出给编辑看？
-    
-- 只需在侧边栏空白处右击，选择“导出当前变体全文”。插件将以无损原文的方式，将所有勾选生效的变体替换到正文中，并自动生成一份干净的全新 .md 导出文件！
-    
-
-### ⚙️ 数据存储机制
-
-所有的变体标注和备选文本数据，均加密保存在您指定的本地 .md 文件（默认：大纲变体标注数据库.md）中的一个 JSON 代码块内。**数据随笔记走，完全离线**，支持任意多端云同步。
-
-### 📥 安装方法
-
-#### 方法一：社区插件安装（推荐）
-
-待本插件通过审核上架后，您可以直接在软件内安装：
-
-1. 打开 Obsidian **设置** > **社区插件** > **浏览**。
-    
-2. 搜索 Variant Compass。
-    
-3. 点击 **安装**，随后选择 **启用**。
-    
-
-#### 方法二：手动安装
-
-1. 前往本仓库的 Releases 页面，下载最新的 main.js、manifest.json 和 styles.css 文件。
-    
-2. 打开您的 Obsidian 库所在的本地文件夹。
-    
-3. 进入 .obsidian/plugins/ 目录，创建一个名为 footnote-compass（或您自定义的英文名）的新文件夹。
-    
-4. 将下载的三个文件放入该文件夹。
-    
-5. 重启 Obsidian，或者在 **设置** > **社区插件** 中刷新并启用该插件。
-    
-
-### 🛠️ 使用指南
-
-1. **呼出面板**：点击 Obsidian 左侧功能栏的 **Message Circle（气泡）** 图标，打开“变体与标注”大纲视图。
-    
-2. **创建分支**：在正文中鼠标选中一段想要进行多版本修改的文字 -> 右击选区 -> 点击 **添加正文变体标注**。
-    
-3. **编写备选**：在右侧弹出的卡片上右击，选择 **添加分支**，写下您的其他备选词句或不同情节。
-    
-4. **实时预览**：勾选卡片中不同的分支前面的复选框，即可在正文中实时查看替换后的效果。光标点击某行时，侧边栏会自动滚动并高亮对应的卡片。
-    
-5. **导出全文**：确定版本后，右击侧边栏空白处并选择 **导出当前变体全文** 即可生成最终定稿。
-    
+### 4. 高级编辑功能
+- **所见即所得复制**：复制包含变体的文本时，自动复制显示的变体内容
+- **图标标记**：支持为标注添加 Obsidian 内置图标，增强视觉识别
+- **批量导出**：一键导出当前所有选中变体的完整文本
 
 ---
 
-## 🇬🇧 English
+## 📦 安装方法
 
-**Variant Compass** is a powerful, specialized Obsidian plugin designed for novelists, scriptwriters, and content creators. It provides an elegant sidebar outline to manage, preview, and export alternative text variants (revisions, dialogue choices, or plot branches) seamlessly without cluttering your original manuscript.
+### 方法一：社区插件安装（推荐）
 
-### 🌟 Key Features
+待插件通过审核并上架社区市场后：
+1. 打开 Obsidian **设置** > **社区插件** > **浏览**
+2. 搜索并选择 `Footnote Compass`
+3. 点击 **安装** 并选择 **启用**
 
-#### 1. Novel/Text Variant Management
+### 方法二：手动安装
 
-- **Add Variants**: Select any text in the editor, right-click, and select "Add Text Variant Annotation" to mark a section of text.
-    
-- **Multiple Branches**: Add multiple alternative drafts, character dialogues, or plot directions under the same marked text in the sidebar.
-    
-- **Custom Icons & Colors**: Assign custom emojis/icons and colors to specific annotations to categorize your plot points or character dialogues.
-    
+1. 前往 [Releases](https://github.com/hornatx/footnote-compass/releases) 页面下载最新的 `main.js` 和 `manifest.json` 文件
+2. 打开您的 Obsidian 库所在的本地文件夹
+3. 进入 `.obsidian/plugins/` 目录，并创建一个名为 `footnote-compass` 的文件夹
+4. 将下载的两个文件放入该文件夹中
+5. 在 Obsidian **设置** > **社区插件** 中重新加载并开启该插件
 
-#### 2. Inline Phantom Preview (WYSIWYG)
+---
 
-- Toggle alternative variants in the sidebar using checkboxes.
-    
-- The checked variant will dynamically replace the original text inline with a beautifully styled, read-only Phantom Widget.
-    
-- **What You See Is What You Get**: If you copy the text while a variant is active, the clipboard will safely capture the variant text!
-    
+## 🎯 使用指南
 
-#### 3. Advanced Sidebar Outline
+### 基础操作
 
-- **Heading Filters**: Filter your variant annotations by document headings (H1 - H6) to focus on a specific chapter.
-    
-- **Display Modes**: Toggle the sidebar card display mode to show only the "Original text", only the "Variant text", or "Both".
-    
-- **Smart Expand/Collapse**: Use the global collapse toggle or auto-expand mode to keep your sidebar clean and focused.
-    
+#### 添加标注
+1. 在 Markdown 文件中选中要标注的文本
+2. 右键点击，选择 **"添加分支标注"**
+3. 标注会自动创建，并在侧边栏显示
 
-#### 4. Ultimate Data Safety & Backups
+#### 管理变体
+1. 在侧边栏的标注卡片上 **右键**
+2. 选择 **"添加分支"** 创建新变体
+3. 点击变体前的复选框即可切换显示
 
-- **Deletion Lock**: Accidental deletions are a thing of the past! Annotated text is locked and protected in the editor. You must remove the annotation from the sidebar before deleting the original text.
-    
-- **Silent Auto-Backups**: A built-in backup engine silently takes snapshots of your annotation database every few hours, keeping up to 50 versions locally.
-    
-- **Database Trash Bin**: If you accidentally rename or delete a file outside Obsidian, your data isn't lost. Use the built-in Database Manager to relink or restore discarded annotations.
-    
+#### 修改原文本
+1. 在侧边栏标注卡片上 **右键**
+2. 选择 **"修改原文本"**
+3. 输入新内容后确认保存
 
-#### 5. One-Click Variant Export
+### 高级功能
 
-- Seamlessly export your alternative draft. Right-click in the sidebar and select "Export Current Variant Fulltext".
-    
-- It generates a new, clean markdown file, automatically substituting all active text variants while keeping your original draft completely untouched.
-    
+#### 标题分类显示
+1. 在侧边栏顶部点击 **标题过滤按钮**（如 "无 ▾"）
+2. 选择标题层级（H1-H6）
+3. 标注会按对应标题分组显示
 
-### ⚙️ Data Storage Mechanism
+#### 显示模式切换
+- **标题模式**：只显示标注的原文本
+- **分支模式**：只显示当前选中的变体
+- **同时模式**：同时显示原文本和变体
 
-All annotation and variant data are stored securely inside a dedicated markdown file (default: 大纲变体标注数据库.md / Annotations.md) inside a hidden JSON code block. This allows your annotations to be safely backed up and synchronized along with your normal vault files offline.
+#### 导出变体全文
+1. 在侧边栏空白处 **右键**
+2. 选择 **"导出当前变体全文"**
+3. 会生成新文件，包含所有选中变体的替换结果
 
-### 📥 Installation
+---
 
-#### Method 1: Community Plugins (Recommended)
+## ⚙️ 设置选项
 
-Once approved, install it directly from the Obsidian plugin store:
+### 数据存储
+- **标注数据存储文件**：指定存储标注数据的 Markdown 文件路径
+- **锁定删除保护**：开启后，被标注的原文不可直接删除
 
-1. Go to **Settings** > **Community plugins** > **Browse**.
-    
-2. Search for Variant Compass.
-    
-3. Click **Install**, then **Enable**.
-    
+### 颜色设置
+- **默认原文本高亮颜色**：正文中标注文本的高亮颜色
+- **默认替换后变体颜色**：变体文本的颜色
+- **侧边栏分类标题颜色**：侧边栏标题分组的颜色
+- **选区背景高亮颜色**：选中文本时的背景色
+- **颜色预设管理**：自定义常用颜色集合
 
-#### Method 2: Manual Installation
+### 显示设置
+- **图标向下微调**：调整标注图标的垂直位置
+- **自动展开**：控制侧边栏标注卡片是否自动展开
 
-1. Go to the Releases page and download main.js, manifest.json, and styles.css.
-    
-2. Open your Obsidian vault folder.
-    
-3. Navigate to <vault>/.obsidian/plugins/ and create a folder named footnote-compass.
-    
-4. Copy the downloaded files into that folder.
-    
-5. Reload Obsidian or toggle the plugin on in Settings.
-    
+### 数据安全
+- **自动备份冷却时间**：两次备份之间的最小间隔（1-60 分钟）
+- **最多保留历史份数**：自动删除超出数量的旧备份（20-100 份）
+- **查看备份文件**：打开备份文件夹进行手动管理
 
-### 🛠️ How to Use
+---
 
-1. **Open the Sidebar**: Click the **Message Circle** ribbon icon on the left sidebar to open the Variant Outline.
-    
-2. **Create a Branch**: Select a word/sentence in your manuscript -> Right-click -> **Add Text Variant Annotation**.
-    
-3. **Write Alternatives**: Right-click the newly created card in the sidebar -> **Add Branch**, and write your alternative plot or dialogue.
-    
-4. **Live Preview**: Check the boxes on the sidebar cards to instantly see the text swap in your document. The sidebar auto-scrolls to the relevant card when you click a line in the editor.
-    
-5. **Export Final Draft**: Right-click the empty space in the sidebar -> **Export Current Variant Fulltext** to generate your final version.
+## 🔧 技术特性
+
+### 性能优化
+- **防抖机制**：编辑时采用 500ms 防抖，避免频繁刷新
+- **缓存读取**：使用 Obsidian 的 `cachedRead` 提升文件读取性能
+- **离线渲染**：使用 DocumentFragment 批量更新 DOM，减少重排
+
+### 数据安全
+- **原子写入**：使用 `vault.process` 确保数据完整写入
+- **防清空保护**：检测到异常数据清空时自动拦截保存
+- **自愈搜索**：文本位置变化时自动修复标注定位
+
+### 跨平台兼容
+- **Obsidian API**：完全使用 Obsidian 官方 API，不依赖 Node.js 模块
+- **资源清理**：`onunload` 时自动清理所有事件监听和 DOM 元素
+- **CSS 变量**：使用 Obsidian 主题变量，支持深色/浅色模式
+
+---
+
+## 📁 文件结构
+
+```
+.footnote-compass/
+├── main.ts              # 插件主文件
+├── manifest.json        # 插件清单
+├── styles.css           # 样式文件
+└── assets/
+    ├── 示例说明.md      # 示例文档
+    ├── 滚轮演示.gif     # 演示动图
+    └── 赞赏码.JPG       # 赞赏二维码
+```
+
+---
+
+## 🤝 反馈与支持
+
+### 问题反馈
+- GitHub Issues: [提交问题](https://github.com/hornatx/footnote-compass/issues)
+- 小红书私信: [@你的小红书ID](https://www.xiaohongshu.com/user/profile/6353523d000000001802f8ae)
+
+### 交流社群
+- QQ 交流群: **1094620986**
+
+### 赞赏支持
+
+<details>
+<summary>🎁 如果觉得有用，请作者喝杯咖啡</summary>
+
+<p align="center">
+  <img src="assets/赞赏码.JPG" width="250" />
+</p>
+
+</details>
+
+---
+
+## 📄 许可证
+
+MIT License
+
+---
+
+## 🙏 致谢
+
+感谢所有使用和反馈的用户，你们的支持是我持续开发的动力！
+
+---
+
+**Made with ❤️ for Obsidian users**
