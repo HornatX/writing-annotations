@@ -7,7 +7,11 @@
 我在小红书发布了许多obsidian的教程和插件开发进度，你的关注就是对我最大的支持
 
 <p align="center">
-  <img src="assets/滚轮演示.gif" alt="插件演示" />
+  <img src="assets/演示1.gif" alt="插件演示" />
+</p>
+
+<p align="center">
+  <img src="assets/演示2.gif" alt="插件演示" />
 </p>
 
 [简体中文](#简体中文) | [用法](#用法) | [English](#english) | [Usage](#usage)
@@ -84,7 +88,11 @@ QQ 交流群：1094620986
 **Footnote Compass** — A powerful Obsidian plugin designed for novel writers, offering advanced text annotation, variant management, and outline navigation. Easily manage different versions, branching plots, and character variations in your stories.
 
 <p align="center">
-  <img src="assets/滚轮演示.gif" alt="Plugin Demo" />
+  <img src="assets/演示1.gif" alt="Plugin Demo" />
+</p>
+
+<p align="center">
+  <img src="assets/演示2.gif" alt="Plugin Demo" />
 </p>
 
 ***
